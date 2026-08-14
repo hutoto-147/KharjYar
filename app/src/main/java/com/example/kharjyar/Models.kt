@@ -17,6 +17,23 @@ data class LedgerEntry(
     val createdAt: Long = System.currentTimeMillis()
 )
 
+data class Debt(
+    val id: Long = 0L,
+    val name: String,
+    val originalAmount: Long,
+    val currentAmount: Long,
+    val note: String = "",
+    val occurredAt: Long,
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+data class DebtSnapshot(
+    val id: Long = 0L,
+    val debtId: Long,
+    val amount: Long,
+    val occurredAt: Long
+)
+
 data class CategoryRow(
     val id: Long = 0L,
     val type: EntryType,

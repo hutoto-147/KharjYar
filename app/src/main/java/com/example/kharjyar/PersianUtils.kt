@@ -38,6 +38,9 @@ object PersianDate {
         return "${monthNames[p.month - 1]} ${p.year}".toPersianDigits()
     }
 
+    fun monthLabel(ref: MonthRef): String =
+        "${monthNames[ref.month - 1]} ${ref.year}".toPersianDigits()
+
     fun parse(text: String): Long? {
         val normalized = text.toEnglishDigits()
             .replace("-", "/")
@@ -60,6 +63,27 @@ object PersianDate {
             if (p.year != year || p.month != month || p.day != day) return null
             cal.timeInMillis
         }.getOrNull()
+    }
+
+    fun dateForMonth(ref: MonthRef, preferredDay: Int): Long {
+        var day = preferredDay.coerceIn(1, 31)
+        while (day >= 1) {
+            val value = parse("${ref.year}/${ref.month}/$day")
+            if (value != null) return value
+            day--
+        }
+        return parse("${ref.year}/${ref.month}/1") ?: System.currentTimeMillis()
+    }
+
+    fun endOfMonth(ref: MonthRef): Long {
+        val cal = newPersianCalendar().apply {
+            clear()
+            set(ref.year, ref.month - 1, 1, 23, 59, 59)
+            set(Calendar.MILLISECOND, 999)
+            add(Calendar.MONTH, 1)
+            add(Calendar.DAY_OF_MONTH, -1)
+        }
+        return cal.timeInMillis
     }
 
     fun lastMonths(count: Int, now: Long = System.currentTimeMillis()): List<MonthRef> {

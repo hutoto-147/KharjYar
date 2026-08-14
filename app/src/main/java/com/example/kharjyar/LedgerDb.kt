@@ -9,7 +9,7 @@ class LedgerDb(context: Context) : SQLiteOpenHelper(
     context,
     "kharjyar.db",
     null,
-    1
+    2
 ) {
     companion object {
         private const val TAG_SEP = "\u001F"
@@ -41,13 +41,7 @@ class LedgerDb(context: Context) : SQLiteOpenHelper(
             )
             """.trimIndent()
         )
-        db.execSQL(
-            """
-            CREATE TABLE custom_tags (
-                name TEXT PRIMARY KEY
-            )
-            """.trimIndent()
-        )
+        db.execSQL("CREATE TABLE custom_tags (name TEXT PRIMARY KEY)")
         db.execSQL(
             """
             CREATE TABLE settings (
@@ -56,23 +50,48 @@ class LedgerDb(context: Context) : SQLiteOpenHelper(
             )
             """.trimIndent()
         )
+        createDebtTables(db)
         db.execSQL("CREATE INDEX idx_entries_occurred_at ON entries(occurred_at)")
         db.execSQL("CREATE INDEX idx_entries_type ON entries(type)")
         db.execSQL("CREATE INDEX idx_entries_category ON entries(category)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    private fun createDebtTables(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS debts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                original_amount INTEGER NOT NULL,
+                current_amount INTEGER NOT NULL,
+                note TEXT NOT NULL DEFAULT '',
+                occurred_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS debt_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                debt_id INTEGER NOT NULL,
+                amount INTEGER NOT NULL,
+                occurred_at INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_debt_history_debt ON debt_history(debt_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_debt_history_date ON debt_history(occurred_at)")
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) createDebtTables(db)
+    }
 
     fun getEntries(): List<LedgerEntry> {
         val result = mutableListOf<LedgerEntry>()
         readableDatabase.query(
-            "entries",
-            null,
-            null,
-            null,
-            null,
-            null,
-            "occurred_at DESC, id DESC"
+            "entries", null, null, null, null, null, "occurred_at DESC, id DESC"
         ).use { cursor ->
             val idIdx = cursor.getColumnIndexOrThrow("id")
             val typeIdx = cursor.getColumnIndexOrThrow("type")
@@ -91,9 +110,7 @@ class LedgerDb(context: Context) : SQLiteOpenHelper(
                     amount = cursor.getLong(amountIdx),
                     category = cursor.getString(categoryIdx),
                     subcategory = cursor.getString(subIdx),
-                    tags = cursor.getString(tagsIdx)
-                        .split(TAG_SEP)
-                        .filter { it.isNotBlank() },
+                    tags = cursor.getString(tagsIdx).split(TAG_SEP).filter { it.isNotBlank() },
                     note = cursor.getString(noteIdx),
                     occurredAt = cursor.getLong(occurredIdx),
                     createdAt = cursor.getLong(createdIdx)
@@ -114,16 +131,10 @@ class LedgerDb(context: Context) : SQLiteOpenHelper(
             put("occurred_at", entry.occurredAt)
             put("created_at", entry.createdAt)
         }
-
         return if (entry.id == 0L) {
             writableDatabase.insertOrThrow("entries", null, values)
         } else {
-            writableDatabase.update(
-                "entries",
-                values,
-                "id = ?",
-                arrayOf(entry.id.toString())
-            )
+            writableDatabase.update("entries", values, "id = ?", arrayOf(entry.id.toString()))
             entry.id
         }
     }
@@ -132,20 +143,92 @@ class LedgerDb(context: Context) : SQLiteOpenHelper(
         writableDatabase.delete("entries", "id = ?", arrayOf(id.toString()))
     }
 
+    fun getDebts(): List<Debt> {
+        val result = mutableListOf<Debt>()
+        readableDatabase.query(
+            "debts", null, null, null, null, null, "updated_at DESC, id DESC"
+        ).use { cursor ->
+            val idIdx = cursor.getColumnIndexOrThrow("id")
+            val nameIdx = cursor.getColumnIndexOrThrow("name")
+            val originalIdx = cursor.getColumnIndexOrThrow("original_amount")
+            val currentIdx = cursor.getColumnIndexOrThrow("current_amount")
+            val noteIdx = cursor.getColumnIndexOrThrow("note")
+            val occurredIdx = cursor.getColumnIndexOrThrow("occurred_at")
+            val updatedIdx = cursor.getColumnIndexOrThrow("updated_at")
+            while (cursor.moveToNext()) {
+                result += Debt(
+                    id = cursor.getLong(idIdx),
+                    name = cursor.getString(nameIdx),
+                    originalAmount = cursor.getLong(originalIdx),
+                    currentAmount = cursor.getLong(currentIdx),
+                    note = cursor.getString(noteIdx),
+                    occurredAt = cursor.getLong(occurredIdx),
+                    updatedAt = cursor.getLong(updatedIdx)
+                )
+            }
+        }
+        return result
+    }
+
+    fun saveDebt(debt: Debt): Long {
+        val db = writableDatabase
+        val now = System.currentTimeMillis()
+        val values = ContentValues().apply {
+            put("name", debt.name.trim())
+            put("original_amount", debt.originalAmount)
+            put("current_amount", debt.currentAmount)
+            put("note", debt.note.trim())
+            put("occurred_at", debt.occurredAt)
+            put("updated_at", now)
+        }
+        val debtId = if (debt.id == 0L) {
+            db.insertOrThrow("debts", null, values)
+        } else {
+            db.update("debts", values, "id = ?", arrayOf(debt.id.toString()))
+            debt.id
+        }
+        val history = ContentValues().apply {
+            put("debt_id", debtId)
+            put("amount", debt.currentAmount)
+            put("occurred_at", debt.occurredAt)
+        }
+        db.insertOrThrow("debt_history", null, history)
+        return debtId
+    }
+
+    fun deleteDebt(id: Long) {
+        writableDatabase.delete("debt_history", "debt_id = ?", arrayOf(id.toString()))
+        writableDatabase.delete("debts", "id = ?", arrayOf(id.toString()))
+    }
+
+    fun getDebtSnapshots(): List<DebtSnapshot> {
+        val result = mutableListOf<DebtSnapshot>()
+        readableDatabase.query(
+            "debt_history", null, null, null, null, null, "occurred_at ASC, id ASC"
+        ).use { cursor ->
+            val idIdx = cursor.getColumnIndexOrThrow("id")
+            val debtIdx = cursor.getColumnIndexOrThrow("debt_id")
+            val amountIdx = cursor.getColumnIndexOrThrow("amount")
+            val occurredIdx = cursor.getColumnIndexOrThrow("occurred_at")
+            while (cursor.moveToNext()) {
+                result += DebtSnapshot(
+                    id = cursor.getLong(idIdx),
+                    debtId = cursor.getLong(debtIdx),
+                    amount = cursor.getLong(amountIdx),
+                    occurredAt = cursor.getLong(occurredIdx)
+                )
+            }
+        }
+        return result
+    }
+
     fun addCustomCategory(type: EntryType, name: String, subcategory: String) {
         if (name.isBlank()) return
-
         val exists = readableDatabase.rawQuery(
-            """
-            SELECT id FROM custom_categories
-            WHERE type = ? AND name = ? AND subcategory = ?
-            LIMIT 1
-            """.trimIndent(),
+            "SELECT id FROM custom_categories WHERE type = ? AND name = ? AND subcategory = ? LIMIT 1",
             arrayOf(type.name, name.trim(), subcategory.trim())
         ).use { it.moveToFirst() }
-
         if (exists) return
-
         val values = ContentValues().apply {
             put("type", type.name)
             put("name", name.trim())
@@ -158,15 +241,8 @@ class LedgerDb(context: Context) : SQLiteOpenHelper(
         val rows = mutableListOf<CategoryRow>()
         val selection = if (type == null) null else "type = ?"
         val args = if (type == null) null else arrayOf(type.name)
-
         readableDatabase.query(
-            "custom_categories",
-            null,
-            selection,
-            args,
-            null,
-            null,
-            "type, name, subcategory"
+            "custom_categories", null, selection, args, null, null, "type, name, subcategory"
         ).use { cursor ->
             val idIdx = cursor.getColumnIndexOrThrow("id")
             val typeIdx = cursor.getColumnIndexOrThrow("type")
@@ -187,57 +263,35 @@ class LedgerDb(context: Context) : SQLiteOpenHelper(
     fun addCustomTag(tag: String) {
         val cleaned = tag.trim().removePrefix("#")
         if (cleaned.isBlank()) return
-        val values = ContentValues().apply {
-            put("name", cleaned)
-        }
-        writableDatabase.insertWithOnConflict(
-            "custom_tags",
-            null,
-            values,
-            SQLiteDatabase.CONFLICT_IGNORE
-        )
+        val values = ContentValues().apply { put("name", cleaned) }
+        writableDatabase.insertWithOnConflict("custom_tags", null, values, SQLiteDatabase.CONFLICT_IGNORE)
     }
 
     fun getCustomTags(): List<String> {
         val result = mutableListOf<String>()
-        readableDatabase.query(
-            "custom_tags",
-            arrayOf("name"),
-            null,
-            null,
-            null,
-            null,
-            "name"
-        ).use { cursor ->
+        readableDatabase.query("custom_tags", arrayOf("name"), null, null, null, null, "name").use { cursor ->
             val idx = cursor.getColumnIndexOrThrow("name")
-            while (cursor.moveToNext()) {
-                result += cursor.getString(idx)
-            }
+            while (cursor.moveToNext()) result += cursor.getString(idx)
         }
         return result
     }
 
-    fun getBudget(): Long {
+    fun getSetting(key: String, defaultValue: String = ""): String {
         return readableDatabase.rawQuery(
-            "SELECT value FROM settings WHERE key = 'monthly_budget' LIMIT 1",
-            null
-        ).use { cursor ->
-            if (cursor.moveToFirst()) cursor.getString(0).toLongOrNull() ?: 0L else 0L
-        }
+            "SELECT value FROM settings WHERE key = ? LIMIT 1", arrayOf(key)
+        ).use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else defaultValue }
     }
 
-    fun setBudget(amount: Long) {
+    fun setSetting(key: String, value: String) {
         val values = ContentValues().apply {
-            put("key", "monthly_budget")
-            put("value", amount.toString())
+            put("key", key)
+            put("value", value)
         }
-        writableDatabase.insertWithOnConflict(
-            "settings",
-            null,
-            values,
-            SQLiteDatabase.CONFLICT_REPLACE
-        )
+        writableDatabase.insertWithOnConflict("settings", null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
+
+    fun getBudget(): Long = getSetting("monthly_budget", "0").toLongOrNull() ?: 0L
+    fun setBudget(amount: Long) = setSetting("monthly_budget", amount.toString())
 }
 
 class LedgerRepository(context: Context) {
@@ -247,15 +301,33 @@ class LedgerRepository(context: Context) {
     fun save(entry: LedgerEntry): Long = db.saveEntry(entry)
     fun delete(id: Long) = db.deleteEntry(id)
 
-    fun customCategories(type: EntryType? = null): List<CategoryRow> =
-        db.getCustomCategories(type)
+    fun debts(): List<Debt> = db.getDebts()
+    fun saveDebt(debt: Debt): Long = db.saveDebt(debt)
+    fun deleteDebt(id: Long) = db.deleteDebt(id)
+    fun debtSnapshots(): List<DebtSnapshot> = db.getDebtSnapshots()
+    fun currentDebtTotal(): Long = db.getDebts().sumOf { it.currentAmount }
 
-    fun addCategory(type: EntryType, name: String, subcategory: String) =
-        db.addCustomCategory(type, name, subcategory)
+    fun debtTotalAt(timeMillis: Long): Long {
+        return db.getDebtSnapshots()
+            .filter { it.occurredAt <= timeMillis }
+            .groupBy { it.debtId }
+            .values
+            .sumOf { snapshots ->
+                snapshots.maxWithOrNull(
+                    compareBy<DebtSnapshot> { it.occurredAt }.thenBy { it.id }
+                )?.amount ?: 0L
+            }
+    }
+
+    fun customCategories(type: EntryType? = null): List<CategoryRow> = db.getCustomCategories(type)
+    fun addCategory(type: EntryType, name: String, subcategory: String) = db.addCustomCategory(type, name, subcategory)
 
     fun customTags(): List<String> = db.getCustomTags()
     fun addTag(tag: String) = db.addCustomTag(tag)
 
     fun budget(): Long = db.getBudget()
     fun setBudget(amount: Long) = db.setBudget(amount)
+
+    fun setting(key: String, defaultValue: String = ""): String = db.getSetting(key, defaultValue)
+    fun setSetting(key: String, value: String) = db.setSetting(key, value)
 }
