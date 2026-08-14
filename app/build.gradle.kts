@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.kharjyar"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "1.0.0"
     }
 
     signingConfigs {
@@ -27,6 +27,11 @@ android {
     buildTypes {
         getByName("debug") {
             signingConfig = signingConfigs.getByName("stableDebug")
+        }
+        getByName("release") {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("stableDebug")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 
