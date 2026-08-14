@@ -49,7 +49,6 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -64,10 +63,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.LocalLayoutDirection
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
@@ -75,11 +72,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             KharjYarTheme {
-                CompositionLocalProvider(
-    androidx.compose.ui.platform.LocalLayoutDirection provides LayoutDirection.Rtl
-) {
-                    LedgerApp()
-                }
+                LedgerApp()
             }
         }
     }
