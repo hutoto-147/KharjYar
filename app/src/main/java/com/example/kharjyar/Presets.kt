@@ -6,7 +6,7 @@ object Presets {
             "سوپرمارکت", "میوه و سبزیجات", "رستوران", "فست‌فود",
             "کافه", "سفارش آنلاین غذا", "نان", "نوشیدنی", "تنقلات", "سایر خوراکی‌ها"
         ),
-        "رفت‌وآمد" to listOf(
+        "خودرو و تردد" to listOf(
             "تاکسی", "تاکسی اینترنتی", "بنزین", "مترو", "اتوبوس",
             "پارکینگ", "عوارض", "تعمیر خودرو", "سرویس خودرو",
             "کارواش", "قطعات خودرو", "سایر"
@@ -62,21 +62,38 @@ object Presets {
 
     val incomeNameableCategories = setOf("شغل دوم", "شغل سوم", "قرض", "سایر منابع")
 
+    fun categoryIcon(category: String, type: EntryType? = null): String = when {
+        category == "خانه" -> "🏠"
+        category == "خوراکی" -> "🍽️"
+        category == "خودرو و تردد" || category == "رفت‌وآمد" -> "🚗"
+        category == "تلفن و اینترنت" -> "📱"
+        category == "خرید شخصی" -> "🛍️"
+        category == "هزینه‌های روزمره" -> "🧾"
+        category == "تفریح" -> "🎬"
+        category == "سلامت و درمان" -> "💊"
+        category == "آموزش" -> "📚"
+        category == "مالی" -> "💳"
+        category == "حقوق" -> "💰"
+        category == "حقوق هم‌خانه" -> "👥"
+        category == "شغل دوم" || category == "شغل سوم" -> "💼"
+        category == "قرض" -> "🤝"
+        category == "سایر منابع" -> "🪙"
+        type == EntryType.INCOME -> "🟢"
+        else -> "📌"
+    }
+
     fun mergedCategories(
         type: EntryType,
         custom: List<CategoryRow>
     ): LinkedHashMap<String, List<String>> {
         val result = linkedMapOf<String, MutableList<String>>()
         val base = if (type == EntryType.EXPENSE) expenseCategories else incomeCategories
-        base.forEach { (name, subs) ->
-            result[name] = subs.toMutableList()
-        }
+        base.forEach { (name, subs) -> result[name] = subs.toMutableList() }
 
         custom.filter { it.type == type }.forEach { row ->
-            val list = result.getOrPut(row.name) { mutableListOf() }
-            if (row.subcategory.isNotBlank() && row.subcategory !in list) {
-                list += row.subcategory
-            }
+            val normalizedName = if (row.name == "رفت‌وآمد") "خودرو و تردد" else row.name
+            val list = result.getOrPut(normalizedName) { mutableListOf() }
+            if (row.subcategory.isNotBlank() && row.subcategory !in list) list += row.subcategory
         }
 
         return LinkedHashMap<String, List<String>>().apply {
