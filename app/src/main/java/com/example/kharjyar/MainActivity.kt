@@ -1427,8 +1427,8 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
                 Text("دخل و خرج با هدف مدیریت ساده و شخصی درآمد، هزینه و تعهدات مالی توسعه داده می‌شود.", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
                 Text("توسعه‌دهنده: hutoto-147", fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(Modifier.weight(1f), onClick = { openUrlSafely(context, "https://github.com/hutoto-147/KharjYar") { status = it } }) { Text("GitHub") }
-                    OutlinedButton(Modifier.weight(1f), onClick = { openUrlSafely(context, "https://github.com/hutoto-147/KharjYar/issues") { status = it } }) { Text("نظر / گزارش مشکل") }
+                    OutlinedButton(onClick = { openUrlSafely(context, "https://github.com/hutoto-147/KharjYar") { status = it } }, modifier = Modifier.weight(1f)) { Text("GitHub") }
+                    OutlinedButton(onClick = { openUrlSafely(context, "https://github.com/hutoto-147/KharjYar/issues") { status = it } }, modifier = Modifier.weight(1f)) { Text("نظر / گزارش مشکل") }
                 }
             }
         }
