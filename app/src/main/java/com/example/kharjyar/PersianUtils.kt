@@ -114,6 +114,22 @@ object PersianDate {
         return cal.timeInMillis
     }
 
+    fun withTime(millis: Long, hour: Int, minute: Int): Long {
+        val cal = newPersianCalendar().apply { timeInMillis = millis }
+        cal.set(Calendar.HOUR_OF_DAY, hour.coerceIn(0, 23))
+        cal.set(Calendar.MINUTE, minute.coerceIn(0, 59))
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        return cal.timeInMillis
+    }
+
+    fun formatTime(millis: Long): String {
+        val cal = newPersianCalendar().apply { timeInMillis = millis }
+        return "${cal.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')}:${cal.get(Calendar.MINUTE).toString().padStart(2, '0')}".toPersianDigits()
+    }
+
+    fun formatDateTime(millis: Long): String = "${format(millis)}، ${formatTime(millis)}"
+
     fun lastMonths(count: Int, now: Long = System.currentTimeMillis()): List<MonthRef> {
         val base = newPersianCalendar().apply {
             timeInMillis = now

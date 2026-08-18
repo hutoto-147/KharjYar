@@ -11,12 +11,15 @@ android {
         applicationId = "com.example.kharjyar"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.0"
+        versionCode = 5
+        versionName = "1.1.0-beta1"
     }
 
+    // سازگاری با نسخه‌های قبلی نصب‌شده از GitHub:
+    // برای اینکه APK جدید به‌صورت Update نصب شود و دیتای قبلی حفظ شود،
+    // فعلاً همان signing key قدیمی استفاده می‌شود.
     signingConfigs {
-        create("stableDebug") {
+        create("legacyCompatible") {
             storeFile = file("kharjyar-test.keystore")
             storePassword = "kharjyar123"
             keyAlias = "kharjyar-test"
@@ -26,11 +29,11 @@ android {
 
     buildTypes {
         getByName("debug") {
-            signingConfig = signingConfigs.getByName("stableDebug")
+            signingConfig = signingConfigs.getByName("legacyCompatible")
         }
         getByName("release") {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("stableDebug")
+            signingConfig = signingConfigs.getByName("legacyCompatible")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -63,5 +66,6 @@ dependencies {
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.biometric:biometric:1.1.0")
 
+    testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

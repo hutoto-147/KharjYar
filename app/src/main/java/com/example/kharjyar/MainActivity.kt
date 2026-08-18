@@ -3,6 +3,7 @@ package com.example.kharjyar
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.os.Build
@@ -10,7 +11,18 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -75,12 +87,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -97,6 +111,10 @@ import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.delay
 import java.security.MessageDigest
+import java.security.SecureRandom
+import java.util.Base64
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.PBEKeySpec
 import kotlin.math.roundToInt
 
 private val IncomeSoftLight = Color(0xFFE2F4E8)
@@ -125,8 +143,8 @@ private data class ThemeBase(
 
 private val themeBases = listOf(
     ThemeBase("lavender", "یاسی", Color(0xFFFFFAFF), Color(0xFFF4EFFA), Color(0xFFF5F0F7), Color(0xFFF0EAF7), Color(0xFF211C27), Color(0xFF17141C), Color(0xFF2A2430), Color(0xFF251F2C), Color(0xFF795CB9)),
-    ThemeBase("mist", "آبی", Color(0xFFFBFDFF), Color(0xFFECF5FB), Color(0xFFF0F6FA), Color(0xFFE8F1F8), Color(0xFF18232B), Color(0xFF10191F), Color(0xFF202E37), Color(0xFF1B2830), Color(0xFF5686A7)),
-    ThemeBase("mint", "سبز", Color(0xFFFCFFFD), Color(0xFFEDF7F1), Color(0xFFF0F7F3), Color(0xFFE8F2EC), Color(0xFF17241C), Color(0xFF101A14), Color(0xFF203026), Color(0xFF1A291F), Color(0xFF56856A)),
+    ThemeBase("mist", "آبی", Color(0xFFF2FAFF), Color(0xFFDCEFFA), Color(0xFFE5F3FA), Color(0xFFD9EBF6), Color(0xFF18232B), Color(0xFF10191F), Color(0xFF202E37), Color(0xFF1B2830), Color(0xFF397FAE)),
+    ThemeBase("mint", "سبز", Color(0xFFF2FFF7), Color(0xFFDDF4E6), Color(0xFFE5F5EB), Color(0xFFD8EEDF), Color(0xFF17241C), Color(0xFF101A14), Color(0xFF203026), Color(0xFF1A291F), Color(0xFF3F8D60)),
     ThemeBase("peach", "هلویی", Color(0xFFFFFCFA), Color(0xFFFBF0E9), Color(0xFFFAF3EE), Color(0xFFF7ECE5), Color(0xFF291F1A), Color(0xFF1D1612), Color(0xFF332720), Color(0xFF2C211B), Color(0xFFB57355)),
     ThemeBase("sand", "کرم", Color(0xFFFFFEF9), Color(0xFFF7F3E5), Color(0xFFF8F5EA), Color(0xFFF1EDDE), Color(0xFF27251B), Color(0xFF1A1912), Color(0xFF302E22), Color(0xFF29271D), Color(0xFF8B7A47))
 )
@@ -201,7 +219,7 @@ class MainActivity : FragmentActivity() {
             }
         })
         val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("ورود به خرج‌یار")
+            .setTitle("ورود به دخل و خرج")
             .setSubtitle("با اثر انگشت یا قفل دستگاه وارد شوید")
             .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
             .build()
@@ -239,7 +257,7 @@ fun LedgerApp(biometricAuthenticated: Boolean, requestBiometric: () -> Unit) {
     LaunchedEffect(Unit) {
         repo.materializeRecurring()
         ReminderScheduler.scheduleAll(context)
-        delay(850)
+        delay(3000)
         showSplash = false
     }
     LaunchedEffect(biometricAuthenticated) { if (biometricAuthenticated) unlocked = true }
@@ -264,13 +282,22 @@ fun LedgerApp(biometricAuthenticated: Boolean, requestBiometric: () -> Unit) {
 
 @Composable
 private fun SplashScreen(theme: VisualTheme) {
+    var entered by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { entered = true }
+    val scale by animateFloatAsState(if (entered) 1f else 0.82f, animationSpec = tween(900), label = "splashScale")
+    val alpha by animateFloatAsState(if (entered) 1f else 0f, animationSpec = tween(700), label = "splashAlpha")
     Box(
-        modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(theme.primary, theme.primary.copy(alpha = 0.78f)))),
+        modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(theme.primary, theme.primary.copy(alpha = 0.72f)))),
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("خرج‌یار", color = Color.White, fontSize = 42.sp, fontWeight = FontWeight.Bold)
-            Text("حساب ساده، تصمیم روشن", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp)
+        Column(
+            modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale, alpha = alpha),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Image(painter = painterResource(com.example.kharjyar.R.drawable.ic_dakhl_kharj_logo), contentDescription = "لوگوی دخل و خرج", modifier = Modifier.size(112.dp))
+            Text("دخل و خرج", color = Color.White, fontSize = 42.sp, fontWeight = FontWeight.Bold)
+            Text("حساب ساده، تصمیم روشن", color = Color.White.copy(alpha = 0.88f), fontSize = 14.sp)
         }
     }
 }
@@ -283,7 +310,7 @@ private fun LockScreen(repo: LedgerRepository, biometricEnabled: Boolean, reques
         Card(Modifier.fillMaxWidth().padding(28.dp), shape = RoundedCornerShape(24.dp)) {
             Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text("🔐", fontSize = 38.sp)
-                Text("ورود به خرج‌یار", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text("ورود به دخل و خرج", fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 OutlinedTextField(
                     value = pin, onValueChange = { pin = it.filter(Char::isDigit).take(8); error = false },
                     label = { Text("PIN") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
@@ -291,7 +318,7 @@ private fun LockScreen(repo: LedgerRepository, biometricEnabled: Boolean, reques
                     isError = error, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center)
                 )
                 Button(modifier = Modifier.fillMaxWidth(), onClick = {
-                    if (sha256(pin) == repo.setting("pin_hash", "")) onUnlocked() else error = true
+                    if (verifyPin(pin, repo)) onUnlocked() else error = true
                 }) { Text("ورود") }
                 if (biometricEnabled) OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = requestBiometric) { Text("ورود با اثر انگشت / قفل دستگاه") }
                 if (error) Text("PIN صحیح نیست.", color = MaterialTheme.colorScheme.error)
@@ -301,6 +328,28 @@ private fun LockScreen(repo: LedgerRepository, biometricEnabled: Boolean, reques
 }
 
 private fun sha256(text: String): String = MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
+
+private fun newPinSalt(): String {
+    val bytes = ByteArray(16)
+    SecureRandom().nextBytes(bytes)
+    return Base64.getEncoder().encodeToString(bytes)
+}
+
+private fun securePinHash(pin: String, salt: String): String {
+    val spec = PBEKeySpec(pin.toCharArray(), Base64.getDecoder().decode(salt), 120_000, 256)
+    return try {
+        Base64.getEncoder().encodeToString(SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded)
+    } finally {
+        spec.clearPassword()
+    }
+}
+
+private fun verifyPin(pin: String, repo: LedgerRepository): Boolean {
+    val stored = repo.setting("pin_hash", "")
+    val salt = repo.setting("pin_salt", "")
+    if (stored.isBlank()) return false
+    return if (salt.isNotBlank()) securePinHash(pin, salt) == stored else sha256(pin) == stored
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -315,7 +364,7 @@ private fun MainScaffold(repo: LedgerRepository, refreshToken: Int, theme: Visua
     val title = when {
         selectedTab == 2 && editingDebt != null -> if (editingDebt?.kind == ObligationKind.LOAN) "ویرایش قرض" else "ویرایش بدهی"
         selectedTab == 2 && editingEntry != null -> "ویرایش تراکنش"
-        selectedTab == 0 -> "خرج‌یار"
+        selectedTab == 0 -> "دخل و خرج"
         selectedTab == 1 -> "تراکنش‌ها"
         selectedTab == 2 -> "ثبت"
         selectedTab == 3 -> "مقایسه"
@@ -342,15 +391,17 @@ private fun MainScaffold(repo: LedgerRepository, refreshToken: Int, theme: Visua
             }
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
-                when (selectedTab) {
-                    0 -> DashboardScreen(repo, refreshToken, theme.isDark)
-                    1 -> TransactionsScreen(repo, refreshToken,
-                        onEdit = { editingEntry = it; editingDebt = null; selectedTab = 2 },
-                        onEditDebt = { editingDebt = it; editingEntry = null; selectedTab = 2 },
-                        onDeleted = onRefresh)
-                    2 -> AddEntryScreen(repo, refreshToken, editingEntry, editingDebt, onSaved = { editingEntry = null; editingDebt = null; onRefresh(); selectedTab = 1 })
-                    3 -> ComparisonScreen(repo, refreshToken)
-                    else -> SettingsScreen(repo, refreshToken, onRefresh)
+                AnimatedContent(targetState = selectedTab, label = "mainTabs") { tab ->
+                    when (tab) {
+                        0 -> DashboardScreen(repo, refreshToken, theme.isDark)
+                        1 -> TransactionsScreen(repo, refreshToken,
+                            onEdit = { editingEntry = it; editingDebt = null; selectedTab = 2 },
+                            onEditDebt = { editingDebt = it; editingEntry = null; selectedTab = 2 },
+                            onDeleted = onRefresh)
+                        2 -> AddEntryScreen(repo, refreshToken, editingEntry, editingDebt, onSaved = { editingEntry = null; editingDebt = null; onRefresh(); selectedTab = 1 })
+                        3 -> ComparisonScreen(repo, refreshToken)
+                        else -> SettingsScreen(repo, refreshToken, onRefresh)
+                    }
                 }
             }
         }
@@ -456,6 +507,22 @@ private fun MetricCard(modifier: Modifier, title: String, value: String, backgro
     }
 }
 
+private sealed interface LedgerFeedItem {
+    val idKey: String
+    val date: Long
+    val amount: Long
+    data class EntryItem(val entry: LedgerEntry) : LedgerFeedItem {
+        override val idKey = "e${entry.id}"
+        override val date = entry.occurredAt
+        override val amount = entry.amount
+    }
+    data class DebtItem(val debt: Debt) : LedgerFeedItem {
+        override val idKey = "d${debt.id}"
+        override val date = debt.occurredAt
+        override val amount = debt.currentAmount
+    }
+}
+
 @Composable
 private fun TransactionsScreen(
     repo: LedgerRepository,
@@ -468,19 +535,26 @@ private fun TransactionsScreen(
     val obligations = remember(refreshToken) { repo.debts() }
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf("همه") }
+    var sortField by rememberSaveable { mutableStateOf("تاریخ") }
+    var sortDirection by rememberSaveable { mutableStateOf("کاهشی") }
     var pendingDeleteEntry by remember { mutableStateOf<LedgerEntry?>(null) }
     var pendingDeleteDebt by remember { mutableStateOf<Debt?>(null) }
     val normalized = query.trim()
 
-    val filteredEntries = entries.filter { e ->
-        val typeOk = when (filter) { "هزینه" -> e.type == EntryType.EXPENSE; "درآمد" -> e.type == EntryType.INCOME; "بدهی", "قرض" -> false; else -> true }
-        val searchOk = normalized.isBlank() || listOf(e.category, e.subcategory, e.note, e.accountName, e.memberName, e.tags.joinToString(" ")).any { it.contains(normalized, true) }
-        typeOk && searchOk
-    }
-    val filteredObligations = obligations.filter { d ->
-        val typeOk = when (filter) { "بدهی" -> d.kind == ObligationKind.DEBT; "قرض" -> d.kind == ObligationKind.LOAN; "همه" -> true; else -> false }
-        val searchOk = normalized.isBlank() || d.name.contains(normalized, true) || d.note.contains(normalized, true)
-        typeOk && searchOk
+    val feed = buildList<LedgerFeedItem> {
+        entries.filter { e ->
+            val typeOk = when (filter) { "هزینه" -> e.type == EntryType.EXPENSE; "درآمد" -> e.type == EntryType.INCOME; "بدهی", "قرض" -> false; else -> true }
+            val searchOk = normalized.isBlank() || listOf(e.category, e.subcategory, e.note, e.accountName, e.memberName, e.tags.joinToString(" ")).any { it.contains(normalized, true) }
+            typeOk && searchOk
+        }.forEach { add(LedgerFeedItem.EntryItem(it)) }
+        obligations.filter { d ->
+            val typeOk = when (filter) { "بدهی" -> d.kind == ObligationKind.DEBT; "قرض" -> d.kind == ObligationKind.LOAN; "همه" -> true; else -> false }
+            val searchOk = normalized.isBlank() || d.name.contains(normalized, true) || d.note.contains(normalized, true)
+            typeOk && searchOk
+        }.forEach { add(LedgerFeedItem.DebtItem(it)) }
+    }.let { items ->
+        val comparator = if (sortField == "مبلغ") compareBy<LedgerFeedItem> { it.amount }.thenBy { it.date } else compareBy<LedgerFeedItem> { it.date }.thenBy { it.amount }
+        if (sortDirection == "افزایشی") items.sortedWith(comparator) else items.sortedWith(comparator.reversed())
     }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -498,12 +572,23 @@ private fun TransactionsScreen(
                 }
             }
         }
-        if (filteredEntries.isEmpty() && filteredObligations.isEmpty()) item { EmptyState("موردی پیدا نشد.") }
-        items(filteredObligations, key = { "d${it.id}" }) { debt ->
-            DebtCard(debt, onEdit = { onEditDebt(debt) }, onDelete = { pendingDeleteDebt = debt })
+        item {
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("مرتب‌سازی", fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(Modifier.weight(1f)) { DropdownSelector("بر اساس", sortField, listOf("تاریخ", "مبلغ")) { sortField = it } }
+                        Box(Modifier.weight(1f)) { DropdownSelector("ترتیب", sortDirection, listOf("کاهشی", "افزایشی")) { sortDirection = it } }
+                    }
+                }
+            }
         }
-        items(filteredEntries, key = { "e${it.id}" }) { entry ->
-            EntryCard(entry, onEdit = { onEdit(entry) }, onDelete = { pendingDeleteEntry = entry })
+        if (feed.isEmpty()) item { EmptyState("موردی پیدا نشد.") }
+        items(feed, key = { it.idKey }) { item ->
+            when (item) {
+                is LedgerFeedItem.EntryItem -> EntryCard(item.entry, onEdit = { onEdit(item.entry) }, onDelete = { pendingDeleteEntry = item.entry })
+                is LedgerFeedItem.DebtItem -> DebtCard(item.debt, onEdit = { onEditDebt(item.debt) }, onDelete = { pendingDeleteDebt = item.debt })
+            }
         }
     }
 
@@ -599,6 +684,8 @@ private fun AddEntryScreen(
     var addReminder by rememberSaveable { mutableStateOf(false) }
     var reminderOffset by rememberSaveable { mutableIntStateOf(3) }
     var customReminderDate by rememberSaveable { mutableStateOf("") }
+    var reminderHour by rememberSaveable { mutableIntStateOf(9) }
+    var reminderMinute by rememberSaveable { mutableIntStateOf(0) }
     var recurring by rememberSaveable { mutableStateOf(false) }
     var recurrence by rememberSaveable { mutableStateOf(RecurrenceFrequency.MONTHLY) }
     var status by remember { mutableStateOf<String?>(null) }
@@ -703,7 +790,7 @@ private fun AddEntryScreen(
                 }
             }
 
-            ReminderEditor(addReminder, { addReminder = it }, reminderOffset, { reminderOffset = it }, customReminderDate, { customReminderDate = it })
+            ReminderEditor(addReminder, { addReminder = it }, reminderOffset, { reminderOffset = it }, customReminderDate, { customReminderDate = it }, reminderHour, { reminderHour = it }, reminderMinute, { reminderMinute = it })
 
             Button(modifier = Modifier.fillMaxWidth(), onClick = {
                 val amount = amountText.toLongAmountOrNull()
@@ -718,10 +805,10 @@ private fun AddEntryScreen(
                 repo.save(saved)
                 if (recurring && editingEntry == null) repo.saveRecurring(RecurringRule(type = entryType, amount = amount, category = category, subcategory = subcategory, note = note, accountName = accountName, memberName = memberName, frequency = recurrence, dayOfMonth = selectedDay, nextRunAt = when (recurrence) { RecurrenceFrequency.WEEKLY -> PersianDate.addDays(date, 7); RecurrenceFrequency.MONTHLY -> PersianDate.addMonths(date, 1); RecurrenceFrequency.YEARLY -> PersianDate.addMonths(date, 12) }))
                 if (addReminder) {
-                    val remindAt = reminderTime(date, reminderOffset, customReminderDate)
+                    val remindAt = reminderTime(date, reminderOffset, customReminderDate, reminderHour, reminderMinute)
                     val rid = repo.saveReminder(ReminderItem(title = "${entryType.titleFa}: $category", note = note, kind = ReminderKind.GENERAL, dueAt = date, remindAt = remindAt))
                     repo.reminders().firstOrNull { it.id == rid }?.let { ReminderScheduler.schedule(context, it) }
-                    if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermissionLauncher.launchSafely(Manifest.permission.POST_NOTIFICATIONS) { status = it }
                 }
                 onSaved()
             }) { Text(if (editingEntry == null) "ثبت ${entryType.titleFa}" else "ذخیره تغییرات") }
@@ -736,18 +823,18 @@ private fun AddEntryScreen(
                 Box(Modifier.weight(0.75f)) { DropdownSelector("روز", selectedDay.toString().toPersianDigits(), days.map { it.toString().toPersianDigits() }) { selectedDay = it.toEnglishDigits().toInt() } }
             }
             OutlinedTextField(note, { note = it }, Modifier.fillMaxWidth().height(105.dp), label = { Text("یادداشت") }, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Start))
-            ReminderEditor(addReminder, { addReminder = it }, reminderOffset, { reminderOffset = it }, customReminderDate, { customReminderDate = it }, title = "یادآوری سررسید")
+            ReminderEditor(addReminder, { addReminder = it }, reminderOffset, { reminderOffset = it }, customReminderDate, { customReminderDate = it }, reminderHour, { reminderHour = it }, reminderMinute, { reminderMinute = it }, title = "یادآوری سررسید")
             Button(modifier = Modifier.fillMaxWidth(), onClick = {
                 val amount = amountText.toLongAmountOrNull()
                 val date = PersianDate.dateForParts(selectedYear, selectedMonth, selectedDay)
                 if (nameText.isBlank() || amount == null || amount <= 0 || date == null) { status = "نام، مبلغ و تاریخ را کامل کنید."; return@Button }
                 val dueAt = if (addReminder) date else editingDebt?.dueAt ?: 0L
-                val remindAt = if (addReminder) reminderTime(dueAt, reminderOffset, customReminderDate) else 0L
+                val remindAt = if (addReminder) reminderTime(dueAt, reminderOffset, customReminderDate, reminderHour, reminderMinute) else 0L
                 val id = repo.saveDebt(Debt(id = editingDebt?.id ?: 0L, name = nameText, originalAmount = editingDebt?.originalAmount ?: amount, currentAmount = amount, note = note, occurredAt = date, kind = kind, dueAt = dueAt, reminderAt = remindAt))
                 if (addReminder) {
                     val rid = repo.saveReminder(ReminderItem(title = "${kind.titleFa}: $nameText", note = note, kind = if (kind == ObligationKind.LOAN) ReminderKind.LOAN else ReminderKind.DEBT, dueAt = dueAt, remindAt = remindAt, linkedId = id))
                     repo.reminders().firstOrNull { it.id == rid }?.let { ReminderScheduler.schedule(context, it) }
-                    if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermissionLauncher.launchSafely(Manifest.permission.POST_NOTIFICATIONS) { status = it }
                 }
                 onSaved()
             }) { Text(if (editingDebt == null) "ثبت ${kind.titleFa}" else "ذخیره تغییرات") }
@@ -766,22 +853,21 @@ private fun AddEntryScreen(
                 Box(Modifier.weight(0.75f)) { DropdownSelector("روز", selectedDay.toString().toPersianDigits(), days.map { it.toString().toPersianDigits() }) { selectedDay = it.toEnglishDigits().toInt() } }
             }
             OutlinedTextField(note, { note = it }, Modifier.fillMaxWidth().height(100.dp), label = { Text("یادداشت") }, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Start))
-            ReminderEditor(true, {}, reminderOffset, { reminderOffset = it }, customReminderDate, { customReminderDate = it }, title = "زمان هشدار", showSwitch = false)
+            ReminderEditor(true, {}, reminderOffset, { reminderOffset = it }, customReminderDate, { customReminderDate = it }, reminderHour, { reminderHour = it }, reminderMinute, { reminderMinute = it }, title = "زمان هشدار", showSwitch = false)
             Button(modifier = Modifier.fillMaxWidth(), onClick = {
                 val dueAt = PersianDate.dateForParts(selectedYear, selectedMonth, selectedDay)
                 if (installmentTitle.isBlank() || dueAt == null) { status = "عنوان و تاریخ سررسید را کامل کنید."; return@Button }
-                val remindAt = reminderTime(dueAt, reminderOffset, customReminderDate)
+                val remindAt = reminderTime(dueAt, reminderOffset, customReminderDate, reminderHour, reminderMinute)
                 if (reminderKind == ReminderKind.INSTALLMENT) {
                     val amount = amountText.toLongAmountOrNull() ?: 0L
                     val count = installmentCount.toEnglishDigits().toIntOrNull() ?: 1
-                    val id = repo.saveInstallment(InstallmentPlan(title = installmentTitle, installmentAmount = amount, remainingCount = count.coerceAtLeast(1), nextDueAt = dueAt, accountName = accountName.ifBlank { "حساب اصلی" }, note = note, reminderDaysBefore = reminderOffset.coerceAtLeast(0)))
-                    val rid = repo.saveReminder(ReminderItem(title = "قسط: $installmentTitle", note = note, kind = ReminderKind.INSTALLMENT, dueAt = dueAt, remindAt = remindAt, linkedId = id))
-                    repo.reminders().firstOrNull { it.id == rid }?.let { ReminderScheduler.schedule(context, it) }
+                    val id = repo.saveInstallment(InstallmentPlan(title = installmentTitle, installmentAmount = amount, remainingCount = count.coerceAtLeast(1), nextDueAt = dueAt, accountName = accountName.ifBlank { "حساب اصلی" }, note = note, reminderDaysBefore = reminderOffset.coerceAtLeast(0), reminderHour = reminderHour, reminderMinute = reminderMinute))
+                    ReminderScheduler.schedule(context, ReminderItem(id = 1_000_000L + id, title = "قسط: $installmentTitle", note = note, kind = ReminderKind.INSTALLMENT, dueAt = dueAt, remindAt = remindAt, linkedId = id))
                 } else {
                     val rid = repo.saveReminder(ReminderItem(title = installmentTitle, note = note, kind = reminderKind, dueAt = dueAt, remindAt = remindAt))
                     repo.reminders().firstOrNull { it.id == rid }?.let { ReminderScheduler.schedule(context, it) }
                 }
-                if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermissionLauncher.launchSafely(Manifest.permission.POST_NOTIFICATIONS) { status = it }
                 onSaved()
             }) { Text("ثبت و تنظیم هشدار") }
         }
@@ -799,29 +885,42 @@ private fun ReminderEditor(
     onOffset: (Int) -> Unit,
     customDate: String,
     onCustomDate: (String) -> Unit,
+    hour: Int,
+    onHour: (Int) -> Unit,
+    minute: Int,
+    onMinute: (Int) -> Unit,
     title: String = "یادآوری",
     showSwitch: Boolean = true
 ) {
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+    Card(Modifier.fillMaxWidth().animateContentSize(), shape = RoundedCornerShape(16.dp)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(title, fontWeight = FontWeight.SemiBold)
                 if (showSwitch) Switch(checked = enabled, onCheckedChange = onEnabled)
             }
-            if (enabled) {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(listOf(7 to "یک هفته قبل", 3 to "۳ روز قبل", 0 to "همان روز", -1 to "تاریخ دلخواه")) { pair ->
-                        FilterChip(selected = offset == pair.first, onClick = { onOffset(pair.first) }, label = { Text(pair.second) })
+            AnimatedVisibility(visible = enabled, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(listOf(7 to "یک هفته قبل", 3 to "۳ روز قبل", 0 to "همان روز", -1 to "تاریخ دلخواه")) { pair ->
+                            FilterChip(selected = offset == pair.first, onClick = { onOffset(pair.first) }, label = { Text(pair.second) })
+                        }
                     }
+                    if (offset == -1) OutlinedTextField(customDate, onCustomDate, Modifier.fillMaxWidth(), label = { Text("تاریخ هشدار: مثال ۱۴۰۵/۰۶/۱۰") }, singleLine = true, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Start))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(Modifier.weight(1f)) { DropdownSelector("ساعت", hour.toString().padStart(2, '0').toPersianDigits(), (0..23).map { it.toString().padStart(2, '0').toPersianDigits() }) { onHour(it.toEnglishDigits().toInt()) } }
+                        Box(Modifier.weight(1f)) { DropdownSelector("دقیقه", minute.toString().padStart(2, '0').toPersianDigits(), (0..59 step 5).map { it.toString().padStart(2, '0').toPersianDigits() }) { onMinute(it.toEnglishDigits().toInt()) } }
+                    }
+                    Text("هشدار در ساعت ${hour.toString().padStart(2, '0').toPersianDigits()}:${minute.toString().padStart(2, '0').toPersianDigits()} با صدای پیش‌فرض اعلان/پیام دستگاه نمایش داده می‌شود.", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start, fontSize = 11.sp)
                 }
-                if (offset == -1) OutlinedTextField(customDate, onCustomDate, Modifier.fillMaxWidth(), label = { Text("تاریخ هشدار: مثال ۱۴۰۵/۰۶/۱۰") }, singleLine = true, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Start))
-                Text("هشدار با نوتیفیکیشن و صدای پیش‌فرض اعلان دستگاه نمایش داده می‌شود.", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start, fontSize = 11.sp)
             }
         }
     }
 }
 
-private fun reminderTime(dueAt: Long, offset: Int, custom: String): Long = if (offset == -1) PersianDate.parse(custom) ?: dueAt else PersianDate.addDays(dueAt, -offset)
+private fun reminderTime(dueAt: Long, offset: Int, custom: String, hour: Int, minute: Int): Long {
+    val base = if (offset == -1) PersianDate.parse(custom) ?: dueAt else PersianDate.addDays(dueAt, -offset)
+    return PersianDate.withTime(base, hour, minute)
+}
 
 @Composable
 private fun DropdownSelector(label: String, value: String, options: List<String>, onSelect: (String) -> Unit) {
@@ -849,7 +948,7 @@ private fun ComparisonScreen(repo: LedgerRepository, refreshToken: Int) {
     val currentRef = MonthRef(now.year, now.month, "")
     val currentSums = monthSums(entries, currentRef.key)
     val months24 = remember { PersianDate.lastMonths(24) }.reversed()
-    var compareMode by rememberSaveable { mutableStateOf("ماه انتخابی") }
+    var compareMode by rememberSaveable { mutableStateOf("ماه") }
     var targetKey by rememberSaveable { mutableStateOf(months24.drop(1).firstOrNull()?.key ?: currentRef.key) }
     var metric by rememberSaveable { mutableStateOf("هر دو") }
     var averageMode by rememberSaveable { mutableStateOf("۳ ماهه") }
@@ -860,25 +959,20 @@ private fun ComparisonScreen(repo: LedgerRepository, refreshToken: Int) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             SectionTitle("درآمد و هزینه ماه جاری")
-            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-                Column(Modifier.padding(14.dp)) {
-                    ColumnBarChart(currentGroups, paletteId, 260)
-                    Text("اختلاف درآمد و هزینه: ${(currentSums.first - currentSums.second).asToman()}", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
-                }
-            }
+            IncomeExpenseOverview(currentSums.first, currentSums.second, paletteId)
         }
         item {
             SectionTitle("نوع مقایسه")
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(listOf("ماه انتخابی", "میانگین‌ها", "دسته‌ها", "زیرمجموعه‌ها", "تگ‌ها", "بدهی‌ها")) { m -> FilterChip(selected = compareMode == m, onClick = { compareMode = m }, label = { Text(m) }) }
+                items(listOf("ماه", "میانگین‌ها", "دسته‌ها", "زیرمجموعه‌ها", "تگ‌ها", "بدهی‌ها")) { m -> FilterChip(selected = compareMode == m, onClick = { compareMode = m }, label = { Text(m) }) }
             }
         }
 
         when (compareMode) {
-            "ماه انتخابی" -> {
+            "ماه" -> {
                 item {
                     val targetRef = months24.firstOrNull { it.key == targetKey } ?: months24.first()
-                    DropdownSelector("ماه مقایسه", PersianDate.monthLabel(targetRef), months24.map { PersianDate.monthLabel(it) }) { label ->
+                    DropdownSelector("ماه", PersianDate.monthLabel(targetRef), months24.map { PersianDate.monthLabel(it) }) { label ->
                         months24.firstOrNull { PersianDate.monthLabel(it) == label }?.let { targetKey = it.key }
                     }
                     Spacer(Modifier.height(10.dp))
@@ -969,6 +1063,34 @@ private fun ComparisonScreen(repo: LedgerRepository, refreshToken: Int) {
 }
 
 @Composable
+private fun IncomeExpenseOverview(income: Long, expense: Long, paletteId: String) {
+    val palette = chartPalettes.firstOrNull { it.id == paletteId } ?: chartPalettes.first()
+    val max = maxOf(income, expense, 1L).toFloat()
+    val incomeRatio by animateFloatAsState((income / max).coerceIn(0f, 1f), animationSpec = tween(700), label = "incomeBar")
+    val expenseRatio by animateFloatAsState((expense / max).coerceIn(0f, 1f), animationSpec = tween(700), label = "expenseBar")
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(24.dp)) {
+        Column(Modifier.fillMaxWidth().padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("مقایسه این ماه", fontSize = 19.sp, fontWeight = FontWeight.Bold)
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("درآمد", fontWeight = FontWeight.SemiBold); Text(income.asToman(), fontWeight = FontWeight.Bold) }
+                Box(Modifier.fillMaxWidth().height(22.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                    Box(Modifier.fillMaxWidth(incomeRatio.coerceAtLeast(0.025f)).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(palette.income))
+                }
+            }
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("هزینه", fontWeight = FontWeight.SemiBold); Text(expense.asToman(), fontWeight = FontWeight.Bold) }
+                Box(Modifier.fillMaxWidth().height(22.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                    Box(Modifier.fillMaxWidth(expenseRatio.coerceAtLeast(0.025f)).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(palette.expense))
+                }
+            }
+            val balance = income - expense
+            Text("مانده این ماه: ${balance.asToman()}", textAlign = TextAlign.Center, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            if (income > 0L) Text("هزینه معادل ${((expense.toDouble() / income.toDouble()) * 100).roundToInt().toString().toPersianDigits()}٪ درآمد است.", textAlign = TextAlign.Center, fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
 private fun MetricChoice(selected: String, onSelect: (String) -> Unit) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(listOf("هر دو", "درآمد", "هزینه")) { item -> FilterChip(selected = selected == item, onClick = { onSelect(item) }, label = { Text(item) }) }
@@ -1041,6 +1163,8 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
     var subcategoryName by remember { mutableStateOf("") }
     var tagName by remember { mutableStateOf("") }
     var pinText by remember { mutableStateOf("") }
+    var recurringExpanded by rememberSaveable { mutableStateOf(false) }
+    var remindersExpanded by rememberSaveable { mutableStateOf(false) }
 
     val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         uri ?: return@rememberLauncherForActivityResult
@@ -1110,12 +1234,12 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
             Text("بکاپ شامل تراکنش‌ها، بدهی و قرض، حساب‌ها، دسته‌ها، تگ‌ها، تنظیمات، اقساط و یادآورهاست. هنگام ذخیره می‌توانید Google Drive یا هر فضای ابری موجود در انتخابگر Android را انتخاب کنید.", Modifier.padding(14.dp), textAlign = TextAlign.Start)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(modifier = Modifier.weight(1f), onClick = { backupLauncher.launch("KharjYar-Backup-${PersianDate.format(System.currentTimeMillis()).replace("/", "-")}.json") }) { Text("تهیه بکاپ") }
-            OutlinedButton(modifier = Modifier.weight(1f), onClick = { restoreLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }) { Text("بازیابی") }
+            Button(modifier = Modifier.weight(1f), onClick = { backupLauncher.launchSafely("DakhlKharj-Backup-${PersianDate.format(System.currentTimeMillis()).replace("/", "-")}.json") { status = it } }) { Text("تهیه بکاپ") }
+            OutlinedButton(modifier = Modifier.weight(1f), onClick = { restoreLauncher.launchSafely(arrayOf("application/json", "text/plain", "*/*")) { status = it } }) { Text("بازیابی") }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(modifier = Modifier.weight(1f), onClick = { xlsxLauncher.launch("KharjYar-Transactions.xlsx") }) { Text("خروجی Excel") }
-            OutlinedButton(modifier = Modifier.weight(1f), onClick = { pdfLauncher.launch("KharjYar-Report.pdf") }) { Text("خروجی PDF") }
+            OutlinedButton(modifier = Modifier.weight(1f), onClick = { xlsxLauncher.launchSafely("DakhlKharj-Transactions.xlsx") { status = it } }) { Text("خروجی Excel") }
+            OutlinedButton(modifier = Modifier.weight(1f), onClick = { pdfLauncher.launchSafely("DakhlKharj-Report.pdf") { status = it } }) { Text("خروجی PDF") }
         }
 
         HorizontalDivider()
@@ -1124,14 +1248,17 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
             Text("دو مسیر در نظر گرفته شده: خواندن SMS در دستگاه‌هایی که Android اجازه بدهد، و دسترسی به اعلان‌ها به‌عنوان مسیر سازگارتر. پیام بانکی مستقیماً وارد دفتر نمی‌شود؛ ابتدا در صندوق بررسی قرار می‌گیرد تا دسته و تگ را بعداً مشخص کنید.", Modifier.padding(14.dp), textAlign = TextAlign.Start)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(modifier = Modifier.weight(1f), onClick = { smsPermissionLauncher.launch(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS)) }) { Text("اجازه SMS") }
-            OutlinedButton(modifier = Modifier.weight(1f), onClick = { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) { Text("دسترسی اعلان‌ها") }
+            Button(modifier = Modifier.weight(1f), onClick = {
+                runCatching { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+                    .onFailure { status = "باز کردن دسترسی اعلان‌ها ممکن نشد: ${it.message}" }
+            }) { Text("فعال‌سازی اعلان بانکی") }
+            OutlinedButton(modifier = Modifier.weight(1f), onClick = { smsPermissionLauncher.launchSafely(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS)) { status = it } }) { Text("SMS (اختیاری)") }
         }
         OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = {
             if (context.checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED) {
                 val imported = runCatching { BankSmsImporter.scanExisting(context) }.getOrDefault(0)
                 status = "${imported.toString().toPersianDigits()} پیام بانکی جدید به صندوق بررسی اضافه شد."; onChanged()
-            } else smsPermissionLauncher.launch(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS))
+            } else smsPermissionLauncher.launchSafely(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS)) { status = it }
         }) { Text("اسکن پیامک‌های قبلی") }
         if (bankImports.isEmpty()) {
             EmptyState("پیام بانکی جدیدی برای بررسی ندارید.")
@@ -1184,49 +1311,83 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
         }
 
         HorizontalDivider()
-        SectionTitle("تراکنش‌های تکرارشونده")
-        if (recurring.isEmpty()) EmptyState("تراکنش تکرارشونده‌ای ثبت نشده است.") else recurring.forEach { rule ->
-            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
-                Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Column { Text("${rule.type.titleFa}: ${rule.category}", fontWeight = FontWeight.Bold); Text("${rule.frequency.titleFa} • بعدی ${PersianDate.format(rule.nextRunAt)}", fontSize = 11.sp) }
-                    TextButton(onClick = { repo.deleteRecurring(rule.id); onChanged() }) { Text("حذف") }
+        Card(Modifier.fillMaxWidth().clickable { recurringExpanded = !recurringExpanded }.animateContentSize(), shape = RoundedCornerShape(16.dp)) {
+            Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column { Text("تراکنش‌های تکرارشونده", fontWeight = FontWeight.Bold, fontSize = 18.sp); Text("${recurring.size.toString().toPersianDigits()} مورد", fontSize = 11.sp) }
+                Text(if (recurringExpanded) "▲" else "▼")
+            }
+        }
+        AnimatedVisibility(recurringExpanded, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (recurring.isEmpty()) EmptyState("تراکنش تکرارشونده‌ای ثبت نشده است.") else recurring.forEach { rule ->
+                    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column { Text("${rule.type.titleFa}: ${rule.category}", fontWeight = FontWeight.Bold); Text("${rule.frequency.titleFa} • بعدی ${PersianDate.format(rule.nextRunAt)}", fontSize = 11.sp) }
+                            TextButton(onClick = { repo.deleteRecurring(rule.id); onChanged() }) { Text("حذف") }
+                        }
+                    }
                 }
             }
         }
 
         HorizontalDivider()
-        SectionTitle("اقساط و یادآورها")
-        if (installments.isEmpty() && reminders.isEmpty()) EmptyState("قسط یا یادآوری ثبت‌شده‌ای ندارید.")
-        installments.forEach { plan ->
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF49371D) else DebtSoftLight), shape = RoundedCornerShape(14.dp)) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("قسط: ${plan.title}", fontWeight = FontWeight.Bold); Text(plan.installmentAmount.asToman()) }
-                    Text("${plan.remainingCount.toString().toPersianDigits()} قسط باقی‌مانده • سررسید بعدی ${PersianDate.format(plan.nextDueAt)}", fontSize = 12.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { repo.advanceInstallment(plan); ReminderScheduler.scheduleAll(context); onChanged() }) { Text("این قسط پرداخت شد") }
-                        TextButton(onClick = { repo.deleteInstallment(plan.id); onChanged() }) { Text("حذف") }
+        Card(Modifier.fillMaxWidth().clickable { remindersExpanded = !remindersExpanded }.animateContentSize(), shape = RoundedCornerShape(16.dp)) {
+            Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column { Text("اقساط و یادآورها", fontWeight = FontWeight.Bold, fontSize = 18.sp); Text("${(installments.size + reminders.count { it.enabled && it.kind != ReminderKind.INSTALLMENT }).toString().toPersianDigits()} مورد", fontSize = 11.sp) }
+                Text(if (remindersExpanded) "▲" else "▼")
+            }
+        }
+        AnimatedVisibility(remindersExpanded, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (installments.isEmpty() && reminders.isEmpty()) EmptyState("قسط یا یادآوری ثبت‌شده‌ای ندارید.")
+                installments.forEach { plan ->
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF49371D) else DebtSoftLight), shape = RoundedCornerShape(14.dp)) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("قسط: ${plan.title}", fontWeight = FontWeight.Bold); Text(plan.installmentAmount.asToman()) }
+                            Text("${plan.remainingCount.toString().toPersianDigits()} قسط باقی‌مانده • سررسید بعدی ${PersianDate.format(plan.nextDueAt)}", fontSize = 12.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = { repo.advanceInstallment(plan); ReminderScheduler.scheduleAll(context); onChanged() }) { Text("این قسط پرداخت شد") }
+                                TextButton(onClick = { ReminderScheduler.cancel(context, 1_000_000L + plan.id); repo.deleteInstallment(plan.id); onChanged() }) { Text("حذف") }
+                            }
+                        }
                     }
                 }
+                reminders.filter { it.enabled && it.kind != ReminderKind.INSTALLMENT }.take(10).forEach { r ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) { Text("🔔 ${r.title}", fontWeight = FontWeight.SemiBold); Text("هشدار ${PersianDate.formatDateTime(r.remindAt)}", fontSize = 11.sp) }
+                        TextButton(onClick = { ReminderScheduler.cancel(context, r.id); repo.deleteReminder(r.id); onChanged() }) { Text("حذف") }
+                    }
+                }
+                OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = {
+                    if (Build.VERSION.SDK_INT >= 33) notificationPermissionLauncher.launchSafely(Manifest.permission.POST_NOTIFICATIONS) { status = it } else status = "در این نسخه Android نیازی به مجوز جداگانه اعلان نیست."
+                }) { Text("بررسی / فعال‌سازی اجازه نوتیفیکیشن") }
+                OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = {
+                    runCatching {
+                        context.startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).apply {
+                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            putExtra(Settings.EXTRA_CHANNEL_ID, ReminderScheduler.CHANNEL_ID)
+                        })
+                    }.onFailure { status = "تنظیمات صدای یادآور باز نشد: ${it.message}" }
+                }) { Text("تنظیم صدای یادآورها") }
             }
         }
-        reminders.filter { it.enabled && it.kind != ReminderKind.INSTALLMENT }.take(10).forEach { r ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) { Text("🔔 ${r.title}", fontWeight = FontWeight.SemiBold); Text("هشدار ${PersianDate.format(r.remindAt)}", fontSize = 11.sp) }
-                TextButton(onClick = { ReminderScheduler.cancel(context, r.id); repo.deleteReminder(r.id); onChanged() }) { Text("حذف") }
-            }
-        }
-        OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = {
-            if (Build.VERSION.SDK_INT >= 33) notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) else status = "در این نسخه Android نیازی به مجوز جداگانه اعلان نیست."
-        }) { Text("بررسی / فعال‌سازی اجازه نوتیفیکیشن") }
 
         HorizontalDivider()
         SectionTitle("قفل و امنیت")
         OutlinedTextField(pinText, { pinText = it.filter(Char::isDigit).take(8) }, Modifier.fillMaxWidth(), label = { Text("PIN چهار تا هشت رقمی") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), singleLine = true, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Center))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(modifier = Modifier.weight(1f), onClick = {
-                if (pinText.length < 4) status = "PIN باید حداقل ۴ رقم باشد." else { repo.setSetting("pin_hash", sha256(pinText)); repo.setSetting("pin_enabled", "1"); pinText = ""; status = "قفل PIN فعال شد."; onChanged() }
+                if (pinText.length < 4) status = "PIN باید حداقل ۴ رقم باشد." else {
+                    val salt = newPinSalt()
+                    repo.setSetting("pin_salt", salt)
+                    repo.setSetting("pin_hash", securePinHash(pinText, salt))
+                    repo.setSetting("pin_enabled", "1")
+                    pinText = ""
+                    status = "قفل PIN با رمزنگاری تقویت‌شده فعال شد."
+                    onChanged()
+                }
             }) { Text("فعال‌سازی PIN") }
-            OutlinedButton(modifier = Modifier.weight(1f), onClick = { repo.setSetting("pin_enabled", "0"); repo.setSetting("pin_hash", ""); repo.setSetting("biometric_enabled", "0"); status = "قفل غیرفعال شد."; onChanged() }) { Text("خاموش کردن") }
+            OutlinedButton(modifier = Modifier.weight(1f), onClick = { repo.setSetting("pin_enabled", "0"); repo.setSetting("pin_hash", ""); repo.setSetting("pin_salt", ""); repo.setSetting("biometric_enabled", "0"); status = "قفل غیرفعال شد."; onChanged() }) { Text("خاموش کردن") }
         }
         val biometricAvailable = remember { BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -1258,9 +1419,32 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
         }
         if (customTags.isNotEmpty()) Text(customTags.joinToString("  ") { "#$it" }, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
 
+
+        HorizontalDivider()
+        SectionTitle("درباره برنامه")
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("دخل و خرج با هدف مدیریت ساده و شخصی درآمد، هزینه و تعهدات مالی توسعه داده می‌شود.", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                Text("توسعه‌دهنده: hutoto-147", fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(Modifier.weight(1f), onClick = { openUrlSafely(context, "https://github.com/hutoto-147/KharjYar") { status = it } }) { Text("GitHub") }
+                    OutlinedButton(Modifier.weight(1f), onClick = { openUrlSafely(context, "https://github.com/hutoto-147/KharjYar/issues") { status = it } }) { Text("نظر / گزارش مشکل") }
+                }
+            }
+        }
+
         status?.let { Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) { Text(it, Modifier.padding(12.dp), textAlign = TextAlign.Start) } }
         Spacer(Modifier.height(28.dp))
     }
+}
+
+private fun <I> ActivityResultLauncher<I>.launchSafely(input: I, onFailure: (String) -> Unit) {
+    runCatching { launch(input) }.onFailure { onFailure("این قابلیت روی دستگاه باز نشد: ${it.message ?: "خطای نامشخص"}") }
+}
+
+private fun openUrlSafely(context: android.content.Context, url: String, onFailure: (String) -> Unit) {
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+        .onFailure { onFailure("باز کردن لینک ممکن نشد: ${it.message ?: "خطای نامشخص"}") }
 }
 
 @Composable

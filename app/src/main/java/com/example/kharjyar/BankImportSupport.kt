@@ -37,26 +37,34 @@ object BankMessageParser {
 
         fun convert(raw: String, unit: String?): Long? {
             val digits = raw.replace(",", "")
-            if (digits.length > 14) return null // شماره کارت/حساب را به‌عنوان مبلغ نگیریم
+            if (digits.length > 14) return null
             val value = digits.toLongOrNull() ?: return null
             if (value < 1_000L) return null
             return if (unit == "ریال" && value >= 10_000L) value / 10L else value
         }
 
-        // اول عددهایی که صریحاً واحد پول دارند؛ این حالت در پیامک‌های بانکی قابل‌اعتمادتر است.
-        val withCurrency = Regex("""([0-9][0-9,]{2,18})\s*(ریال|تومان)""").findAll(normalized)
-            .mapNotNull { convert(it.groupValues[1], it.groupValues[2]) }.toList()
-        if (withCurrency.isNotEmpty()) return withCurrency.maxOrNull()
+        // اولویت با عددی است که کنار واژه خود تراکنش آمده؛ نه موجودی/مانده حساب.
+        val transactionWithCurrency = Regex(
+            """(?:مبلغ|به مبلغ|برداشت|واریز|واریزی|خرید|پرداخت|کسر|دریافت|انتقال)\D{0,28}([0-9][0-9,]{2,18})\s*(ریال|تومان)"""
+        ).findAll(normalized).mapNotNull { convert(it.groupValues[1], it.groupValues[2]) }.toList()
+        if (transactionWithCurrency.isNotEmpty()) return transactionWithCurrency.first()
 
-        // بعد عددی که نزدیک واژه مبلغ/برداشت/واریز/خرید/پرداخت آمده است.
-        val contextual = Regex("""(?:مبلغ|به مبلغ|برداشت|واریز|واریزی|خرید|پرداخت|کسر|دریافت)\D{0,22}([0-9][0-9,]{2,18})""").findAll(normalized)
-            .mapNotNull { convert(it.groupValues[1], null) }.toList()
-        if (contextual.isNotEmpty()) return contextual.maxOrNull()
+        val contextual = Regex(
+            """(?:مبلغ|به مبلغ|برداشت|واریز|واریزی|خرید|پرداخت|کسر|دریافت|انتقال)\D{0,28}([0-9][0-9,]{2,18})"""
+        ).findAll(normalized).mapNotNull { convert(it.groupValues[1], null) }.toList()
+        if (contextual.isNotEmpty()) return contextual.first()
 
-        // آخرین راه: بزرگ‌ترین عدد معقول؛ برای کاهش خطا اعداد خیلی بلند حذف می‌شوند.
+        // عددهای دارای واحد که در نزدیکی «موجودی/مانده» هستند کنار گذاشته می‌شوند.
+        val currencyMatches = Regex("""([0-9][0-9,]{2,18})\s*(ریال|تومان)""").findAll(normalized).mapNotNull { match ->
+            val before = normalized.substring(maxOf(0, match.range.first - 24), match.range.first).lowercase()
+            if (before.contains("موجودی") || before.contains("مانده")) null else convert(match.groupValues[1], match.groupValues[2])
+        }.toList()
+        if (currencyMatches.isNotEmpty()) return currencyMatches.first()
+
+        // آخرین راه: بزرگ‌ترین عدد معقول، با حذف سال شمسی و اعداد خیلی بلند.
         return Regex("""(?<!\d)([0-9][0-9,]{2,13})(?!\d)""").findAll(normalized)
             .mapNotNull { convert(it.groupValues[1], null) }
-            .filterNot { it in 1300L..1600L } // سال شمسیِ تنها معمولاً مبلغ نیست
+            .filterNot { it in 1300L..1600L }
             .maxOrNull()
     }
 }
