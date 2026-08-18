@@ -9,6 +9,7 @@ import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
@@ -102,6 +103,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -286,103 +288,32 @@ fun LedgerApp(biometricAuthenticated: Boolean, requestBiometric: () -> Unit) {
 
 @Composable
 private fun SplashScreen(theme: VisualTheme) {
-    var entered by remember { mutableStateOf(false) }
-    var spin by remember { mutableStateOf(false) }
-    var showText by remember { mutableStateOf(false) }
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
 
-    LaunchedEffect(Unit) {
-        entered = true
-        spin = true
-        delay(650)
-        showText = true
-    }
-
-    val scale by animateFloatAsState(
-        if (entered) 1f else 0.72f,
-        animationSpec = tween(850),
-        label = "splashScale"
-    )
     val alpha by animateFloatAsState(
-        if (entered) 1f else 0f,
-        animationSpec = tween(600),
-        label = "splashAlpha"
-    )
-    val rotation by animateFloatAsState(
-        if (spin) 360f else 0f,
-        animationSpec = tween(2350),
-        label = "splashRotation"
-    )
-    val textAlpha by animateFloatAsState(
-        if (showText) 1f else 0f,
-        animationSpec = tween(550),
-        label = "splashTextAlpha"
-    )
-    val textOffset by animateFloatAsState(
-        if (showText) 0f else 18f,
-        animationSpec = tween(550),
-        label = "splashTextOffset"
+        if (visible) 1f else 0f,
+        animationSpec = tween(1000),
+        label = "splashNameAlpha"
     )
 
-    val brandNavy = Color(0xFF052A42)
     Box(
-        modifier = Modifier.fillMaxSize().background(
-            Brush.verticalGradient(
-                listOf(Color(0xFF0B4564), brandNavy, Color(0xFF031C2E))
-            )
-        ),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF0B4564), Color(0xFF052A42), Color(0xFF031C2E))
+                )
+            ),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(190.dp)
-                    .graphicsLayer(scaleX = scale, scaleY = scale, alpha = alpha),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_dakhl_kharj_brand),
-                    contentDescription = "لوگوی دخل و خرج",
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer(rotationZ = rotation)
-                )
-
-                // Center mask keeps the currency symbol visually fixed while arrows rotate.
-                Box(
-                    modifier = Modifier
-                        .size(66.dp)
-                        .clip(CircleShape)
-                        .background(brandNavy)
-                )
-                Text(
-                    "\$",
-                    color = Color.White,
-                    fontSize = 58.sp,
-                    lineHeight = 58.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale,
-                        alpha = alpha
-                    )
-                )
-            }
-
-            Column(
-                modifier = Modifier.graphicsLayer(
-                    alpha = textAlpha,
-                    translationY = textOffset
-                ),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text("دخل و خرج", color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
-                Text("حساب ساده، تصمیم روشن", color = Color.White.copy(alpha = 0.84f), fontSize = 14.sp)
-            }
-        }
+        Text(
+            "دخل و خرج",
+            color = Color.White,
+            fontSize = 42.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.graphicsLayer(alpha = alpha)
+        )
     }
 }
 
@@ -705,7 +636,24 @@ private fun EntryCard(entry: LedgerEntry, onEdit: () -> Unit, onDelete: () -> Un
                         if (entry.subcategory.isNotBlank()) Text(entry.subcategory, fontSize = 12.sp)
                     }
                 }
-                Text((if (entry.type == EntryType.INCOME) "+ " else "− ") + entry.amount.asToman(), color = strong, fontWeight = FontWeight.Bold)
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            if (entry.type == EntryType.INCOME) "+" else "−",
+                            color = strong,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            entry.amount.asToman(),
+                            color = strong,
+                            fontWeight = FontWeight.Bold,
+                            style = LocalTextStyle.current.copy(textDirection = TextDirection.Rtl)
+                        )
+                    }
+                }
             }
             Text("${PersianDate.format(entry.occurredAt)}  •  ${entry.accountName}  •  ${entry.memberName}", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start, fontSize = 12.sp)
             if (entry.note.isNotBlank()) Text(entry.note, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
@@ -1324,10 +1272,18 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
                             }
                         }
                     }
-                    status = result.fold(
-                        onSuccess = { "بکاپ ذخیره شد: $it" },
-                        onFailure = { "خطا در ذخیره بکاپ: ${it.message ?: "امکان ساخت فایل نبود."}" }
-                    )
+                    result.onSuccess { path ->
+                        status = "بکاپ ذخیره شد: $path"
+                        Toast.makeText(
+                            context,
+                            "بکاپ با موفقیت ذخیره شد\n$path",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }.onFailure {
+                        val message = "خطا در ذخیره بکاپ: ${it.message ?: "امکان ساخت فایل نبود."}"
+                        status = message
+                        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                    }
                 }
             }) { Text("تهیه بکاپ") }
             OutlinedButton(modifier = Modifier.weight(1f), onClick = {
@@ -1347,10 +1303,14 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
                             ) { output -> Exporters.writeExcel(entries, output) }
                         }
                     }
-                    status = result.fold(
-                        onSuccess = { "فایل Excel ذخیره شد: $it" },
-                        onFailure = { "خطا در Excel: ${it.message ?: "امکان ساخت فایل نبود."}" }
-                    )
+                    result.onSuccess { path ->
+                        status = "فایل Excel ذخیره شد: $path"
+                        Toast.makeText(context, "فایل Excel ذخیره شد\n$path", Toast.LENGTH_LONG).show()
+                    }.onFailure {
+                        val message = "خطا در Excel: ${it.message ?: "امکان ساخت فایل نبود."}"
+                        status = message
+                        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                    }
                 }
             }) { Text("خروجی Excel") }
             OutlinedButton(modifier = Modifier.weight(1f), onClick = {
@@ -1363,10 +1323,14 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
                             }
                         }
                     }
-                    status = result.fold(
-                        onSuccess = { "فایل PDF ذخیره شد: $it" },
-                        onFailure = { "خطا در PDF: ${it.message ?: "امکان ساخت فایل نبود."}" }
-                    )
+                    result.onSuccess { path ->
+                        status = "فایل PDF ذخیره شد: $path"
+                        Toast.makeText(context, "فایل PDF ذخیره شد\n$path", Toast.LENGTH_LONG).show()
+                    }.onFailure {
+                        val message = "خطا در PDF: ${it.message ?: "امکان ساخت فایل نبود."}"
+                        status = message
+                        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                    }
                 }
             }) { Text("خروجی PDF") }
         }
