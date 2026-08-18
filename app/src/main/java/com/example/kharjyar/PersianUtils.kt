@@ -155,8 +155,28 @@ object PersianDate {
     }
 }
 
-fun Long.asToman(): String =
-    "${this.toString().toPersianDigits()} تومان"
+/**
+ * Groups the digits of the absolute value of this number into 3-digit
+ * clusters separated by "." (e.g. 120000000 -> "۱۲۰.۰۰۰.۰۰۰").
+ * A dot is used instead of a comma so it doesn't get confused with the
+ * decimal comma some Persian locales use, and doesn't collide with the
+ * "٬" grouping mark used elsewhere for parsing.
+ */
+fun Long.toGroupedPersianDigits(): String {
+    val digits = kotlin.math.abs(this).toString()
+    val grouped = buildString {
+        for (i in digits.indices) {
+            if (i > 0 && (digits.length - i) % 3 == 0) append('.')
+            append(digits[i])
+        }
+    }
+    return grouped.toPersianDigits()
+}
+
+fun Long.asToman(): String {
+    val sign = if (this < 0) "− " else ""
+    return "$sign${this.toGroupedPersianDigits()} تومان"
+}
 
 fun Long.asCompactToman(): String =
     asToman()

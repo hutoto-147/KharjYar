@@ -277,7 +277,10 @@ fun LedgerApp(biometricAuthenticated: Boolean, requestBiometric: () -> Unit) {
     val fontScale = repo.setting("font_scale", "1.0").toFloatOrNull() ?: 1f
 
     KharjYarTheme(theme, fontName, fontScale) {
-        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides LayoutDirection.Rtl,
+            LocalTextStyle provides LocalTextStyle.current.copy(textDirection = TextDirection.Rtl)
+        ) {
             when {
                 showSplash -> SplashScreen(theme)
                 lockEnabled && !unlocked -> LockScreen(repo, biometricEnabled, requestBiometric) { unlocked = true }
@@ -555,7 +558,7 @@ private fun MoneyText(
     fontWeight: FontWeight? = null,
     fontSize: TextUnit = TextUnit.Unspecified
 ) {
-    val raw = kotlin.math.abs(amount).toString().toPersianDigits()
+    val raw = amount.toGroupedPersianDigits()
     val sign = when {
         forcedSign == "+" -> "+ "
         forcedSign == "−" -> "− "
