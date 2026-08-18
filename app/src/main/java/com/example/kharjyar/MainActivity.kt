@@ -90,7 +90,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -556,69 +555,19 @@ private fun MoneyText(
     fontWeight: FontWeight? = null,
     fontSize: TextUnit = TextUnit.Unspecified
 ) {
-    val parts = remember(amount, compact, forcedSign) {
-        amount.moneyParts(compact = compact, forcedSign = forcedSign)
+    val value = when {
+        forcedSign == "+" -> "+ " + kotlin.math.abs(amount).asToman()
+        forcedSign == "−" -> "− " + kotlin.math.abs(amount).asToman()
+        compact -> amount.asCompactToman()
+        else -> amount.asToman()
     }
-
-    // Physical layout, not bidi layout:
-    // sign -> number -> unit are placed by absolute x coordinates.
-    // This keeps Persian units such as تومان/هزار/میلیون/میلیارد on the same row
-    // without allowing RTL/LTR reordering.
-    Layout(
+    Text(
+        text = value,
         modifier = modifier,
-        content = {
-            Text(
-                parts.sign,
-                color = color,
-                fontWeight = fontWeight,
-                fontSize = fontSize,
-                style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr)
-            )
-            Text(
-                parts.number,
-                color = color,
-                fontWeight = fontWeight,
-                fontSize = fontSize,
-                style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr)
-            )
-            Text(
-                parts.unit,
-                color = color,
-                fontWeight = fontWeight,
-                fontSize = fontSize,
-                style = LocalTextStyle.current.copy(textDirection = TextDirection.Rtl)
-            )
-        }
-    ) { measurables, constraints ->
-        val gap = 4.dp.roundToPx()
-        val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
-        val signP = placeables[0]
-        val numberP = placeables[1]
-        val unitP = placeables[2]
-
-        val signVisible = parts.sign.isNotBlank()
-        val unitVisible = parts.unit.isNotBlank()
-
-        val width =
-            (if (signVisible) signP.width + gap else 0) +
-            numberP.width +
-            (if (unitVisible) gap + unitP.width else 0)
-        val height = maxOf(signP.height, numberP.height, unitP.height)
-
-        layout(width.coerceIn(constraints.minWidth, constraints.maxWidth), height) {
-            var x = 0
-            if (signVisible) {
-                signP.place(x, (height - signP.height) / 2)
-                x += signP.width + gap
-            }
-            numberP.place(x, (height - numberP.height) / 2)
-            x += numberP.width
-            if (unitVisible) {
-                x += gap
-                unitP.place(x, (height - unitP.height) / 2)
-            }
-        }
-    }
+        color = color,
+        fontWeight = fontWeight,
+        fontSize = fontSize
+    )
 }
 
 @Composable
@@ -629,15 +578,13 @@ private fun LabeledMoneyLine(
     fontWeight: FontWeight? = null,
     fontSize: TextUnit = TextUnit.Unspecified
 ) {
-    Row(
+    Text(
+        text = "$label ${amount.asToman()}",
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (centered) Arrangement.Center else Arrangement.Start,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, fontWeight = fontWeight, fontSize = fontSize)
-        Spacer(Modifier.width(6.dp))
-        MoneyText(amount = amount, fontWeight = fontWeight, fontSize = fontSize)
-    }
+        textAlign = if (centered) TextAlign.Center else TextAlign.Start,
+        fontWeight = fontWeight,
+        fontSize = fontSize
+    )
 }
 
 private sealed interface LedgerFeedItem {
@@ -754,9 +701,8 @@ private fun EntryCard(entry: LedgerEntry, onEdit: () -> Unit, onDelete: () -> Un
                         if (entry.subcategory.isNotBlank()) Text(entry.subcategory, fontSize = 12.sp)
                     }
                 }
-                MoneyText(
-                    amount = entry.amount,
-                    forcedSign = if (entry.type == EntryType.INCOME) "+" else "−",
+                Text(
+                    (if (entry.type == EntryType.INCOME) "+ " else "− ") + entry.amount.asToman(),
                     color = strong,
                     fontWeight = FontWeight.Bold
                 )

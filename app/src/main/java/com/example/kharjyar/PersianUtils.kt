@@ -155,38 +155,17 @@ object PersianDate {
     }
 }
 
-data class MoneyParts(
-    val sign: String,
-    val number: String,
-    val unit: String
-)
-
-private fun Long.groupedMagnitudeFa(): String {
-    val magnitude = toString().removePrefix("-")
-    return magnitude.reversed().chunked(3).joinToString(",").reversed().toPersianDigits()
-}
-
-fun Long.moneyParts(compact: Boolean = false, forcedSign: String? = null): MoneyParts {
-    val sign = forcedSign ?: if (this < 0L) "−" else ""
-    if (!compact) return MoneyParts(sign, groupedMagnitudeFa(), "تومان")
-
-    val value = kotlin.math.abs(toDouble())
-    return when {
-        value >= 1_000_000_000 -> MoneyParts(sign, formatOneDecimal(value / 1_000_000_000), "میلیارد")
-        value >= 1_000_000 -> MoneyParts(sign, formatOneDecimal(value / 1_000_000), "میلیون")
-        value >= 1_000 -> MoneyParts(sign, formatOneDecimal(value / 1_000), "هزار")
-        else -> MoneyParts(sign, groupedMagnitudeFa(), "")
-    }
-}
-
-fun Long.asToman(): String {
-    val p = moneyParts()
-    return listOf(p.sign, p.number, p.unit).filter { it.isNotBlank() }.joinToString(" ")
-}
+fun Long.asToman(): String =
+    "${NumberFormat.getNumberInstance(Locale("fa", "IR")).format(this)} تومان"
 
 fun Long.asCompactToman(): String {
-    val p = moneyParts(compact = true)
-    return listOf(p.sign, p.number, p.unit).filter { it.isNotBlank() }.joinToString(" ")
+    val value = this.toDouble()
+    return when {
+        kotlin.math.abs(value) >= 1_000_000_000 -> "${formatOneDecimal(value / 1_000_000_000)} میلیارد"
+        kotlin.math.abs(value) >= 1_000_000 -> "${formatOneDecimal(value / 1_000_000)} میلیون"
+        kotlin.math.abs(value) >= 1_000 -> "${formatOneDecimal(value / 1_000)} هزار"
+        else -> NumberFormat.getNumberInstance(Locale("fa", "IR")).format(this)
+    }
 }
 
 private fun formatOneDecimal(value: Double): String {
