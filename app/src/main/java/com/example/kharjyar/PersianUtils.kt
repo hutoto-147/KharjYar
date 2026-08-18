@@ -156,22 +156,10 @@ object PersianDate {
 }
 
 fun Long.asToman(): String =
-    "${NumberFormat.getNumberInstance(Locale("fa", "IR")).format(this)} تومان"
+    "${this.toString().toPersianDigits()} تومان"
 
-fun Long.asCompactToman(): String {
-    val value = this.toDouble()
-    return when {
-        kotlin.math.abs(value) >= 1_000_000_000 -> "${formatOneDecimal(value / 1_000_000_000)} میلیارد"
-        kotlin.math.abs(value) >= 1_000_000 -> "${formatOneDecimal(value / 1_000_000)} میلیون"
-        kotlin.math.abs(value) >= 1_000 -> "${formatOneDecimal(value / 1_000)} هزار"
-        else -> NumberFormat.getNumberInstance(Locale("fa", "IR")).format(this)
-    }
-}
-
-private fun formatOneDecimal(value: Double): String {
-    val rounded = if (value % 1.0 == 0.0) value.toLong().toString() else "%.1f".format(Locale.US, value)
-    return rounded.toPersianDigits()
-}
+fun Long.asCompactToman(): String =
+    asToman()
 
 fun String.toEnglishDigits(): String = buildString {
     this@toEnglishDigits.forEach { ch ->
@@ -200,9 +188,7 @@ fun String.toPersianDigits(): String = buildString {
 fun String.formatAmountInput(): String {
     val digits = toEnglishDigits().filter { it.isDigit() }
     if (digits.isEmpty()) return ""
-    val normalized = digits.dropWhile { it == '0' }.ifEmpty { "0" }
-    val grouped = normalized.reversed().chunked(3).joinToString("٬").reversed()
-    return grouped.toPersianDigits()
+    return digits.toPersianDigits()
 }
 
 fun String.toLongAmountOrNull(): Long? {

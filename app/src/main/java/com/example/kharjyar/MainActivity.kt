@@ -546,34 +546,6 @@ private fun MetricCard(modifier: Modifier, title: String, amount: Long, backgrou
 }
 
 @Composable
-private fun MoneySignMark(
-    positive: Boolean,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    val resolvedColor = if (color == Color.Unspecified) MaterialTheme.colorScheme.onSurface else color
-    Box(
-        modifier = modifier.size(12.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            Modifier
-                .width(10.dp)
-                .height(2.dp)
-                .background(resolvedColor, RoundedCornerShape(2.dp))
-        )
-        if (positive) {
-            Box(
-                Modifier
-                    .width(2.dp)
-                    .height(10.dp)
-                    .background(resolvedColor, RoundedCornerShape(2.dp))
-            )
-        }
-    }
-}
-
-@Composable
 private fun MoneyText(
     amount: Long,
     modifier: Modifier = Modifier,
@@ -583,38 +555,20 @@ private fun MoneyText(
     fontWeight: FontWeight? = null,
     fontSize: TextUnit = TextUnit.Unspecified
 ) {
-    val signKind = when {
-        forcedSign == "+" -> 1
-        forcedSign == "−" -> -1
-        amount < 0L -> -1
-        else -> 0
+    val raw = kotlin.math.abs(amount).toString().toPersianDigits()
+    val sign = when {
+        forcedSign == "+" -> "+ "
+        forcedSign == "−" -> "− "
+        amount < 0L -> "− "
+        else -> ""
     }
-    val magnitude = kotlin.math.abs(amount)
-    val value = if (compact) magnitude.asCompactToman() else magnitude.asToman()
-
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        Row(
-            modifier = modifier,
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            if (signKind != 0) {
-                MoneySignMark(
-                    positive = signKind > 0,
-                    color = color
-                )
-            }
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                Text(
-                    text = value,
-                    color = color,
-                    fontWeight = fontWeight,
-                    fontSize = fontSize,
-                    style = LocalTextStyle.current.copy(textDirection = TextDirection.Rtl)
-                )
-            }
-        }
-    }
+    Text(
+        text = "$sign$raw تومان",
+        modifier = modifier,
+        color = color,
+        fontWeight = fontWeight,
+        fontSize = fontSize
+    )
 }
 
 @Composable
@@ -625,19 +579,13 @@ private fun LabeledMoneyLine(
     fontWeight: FontWeight? = null,
     fontSize: TextUnit = TextUnit.Unspecified
 ) {
-    Row(
+    Text(
+        text = "$label ${amount.asToman()}",
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (centered) Arrangement.Center else Arrangement.Start,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(label, fontWeight = fontWeight, fontSize = fontSize)
-        Spacer(Modifier.width(6.dp))
-        MoneyText(
-            amount = amount,
-            fontWeight = fontWeight,
-            fontSize = fontSize
-        )
-    }
+        textAlign = if (centered) TextAlign.Center else TextAlign.Start,
+        fontWeight = fontWeight,
+        fontSize = fontSize
+    )
 }
 
 private sealed interface LedgerFeedItem {
