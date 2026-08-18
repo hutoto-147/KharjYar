@@ -1,4 +1,4 @@
-name: Build Dakhl-o-Kharj
+name: Build Dakhl-o-Kharj AAB
 
 on:
   workflow_dispatch:
@@ -6,13 +6,9 @@ on:
     branches:
       - main
       - 'release/**'
-      - 'agent/**'
-  pull_request:
-    branches:
-      - main
 
 jobs:
-  test-and-build-debug:
+  build:
     runs-on: ubuntu-24.04
 
     steps:
@@ -30,15 +26,15 @@ jobs:
         with:
           gradle-version: '9.4.1'
 
-      - name: Run unit tests
+      - name: Run tests
         run: gradle :app:testDebugUnitTest --no-daemon
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug --no-daemon
+      - name: Build Release AAB
+        run: gradle :app:bundleRelease --no-daemon
 
-      - name: Upload debug APK
+      - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
-          name: DakhlKharj-Debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: KharjYar-Release-AAB
+          path: app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
