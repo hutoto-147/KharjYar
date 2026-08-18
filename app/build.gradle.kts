@@ -11,13 +11,11 @@ android {
         applicationId = "com.example.kharjyar"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
-        versionName = "1.1.0-beta14"
+        versionCode = 30
+        versionName = "1.1.0-beta16"
     }
 
-    // سازگاری با نسخه‌های قبلی نصب‌شده از GitHub:
-    // برای اینکه APK جدید به‌صورت Update نصب شود و دیتای قبلی حفظ شود،
-    // فعلاً همان signing key قدیمی استفاده می‌شود.
+    // سازگاری با نسخه‌های قبلی نصب‌شده از GitHub
     signingConfigs {
         create("legacyCompatible") {
             storeFile = file("kharjyar-test.keystore")

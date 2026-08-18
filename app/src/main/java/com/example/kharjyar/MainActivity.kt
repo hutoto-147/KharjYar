@@ -560,13 +560,13 @@ private fun MoneyText(
 ) {
     val raw = amount.toGroupedPersianDigits()
     val sign = when {
-        forcedSign == "+" -> "+ "
-        forcedSign == "−" -> "− "
-        amount < 0L -> "− "
+        forcedSign == "+" -> "+"
+        forcedSign == "−" -> "−"
+        amount < 0L -> "−"
         else -> ""
     }
     Text(
-        text = "$sign$raw تومان",
+        text = "$raw$sign تومان",
         modifier = modifier,
         color = color,
         fontWeight = fontWeight,

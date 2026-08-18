@@ -2,8 +2,6 @@ package com.example.kharjyar
 
 import android.icu.util.Calendar
 import android.icu.util.ULocale
-import java.text.NumberFormat
-import java.util.Locale
 
 object PersianDate {
     private fun newPersianCalendar(): Calendar =
@@ -166,7 +164,7 @@ fun Long.toGroupedPersianDigits(): String {
     val digits = kotlin.math.abs(this).toString()
     val grouped = buildString {
         for (i in digits.indices) {
-            if (i > 0 && (digits.length - i) % 3 == 0) append('.')
+            if (i > 0 && (digits.length - i) % 3 == 0) append('٬')
             append(digits[i])
         }
     }
@@ -174,8 +172,8 @@ fun Long.toGroupedPersianDigits(): String {
 }
 
 fun Long.asToman(): String {
-    val sign = if (this < 0) "− " else ""
-    return "$sign${this.toGroupedPersianDigits()} تومان"
+    val sign = if (this < 0) "−" else ""
+    return "${this.toGroupedPersianDigits()}$sign تومان"
 }
 
 fun Long.asCompactToman(): String =
@@ -208,7 +206,9 @@ fun String.toPersianDigits(): String = buildString {
 fun String.formatAmountInput(): String {
     val digits = toEnglishDigits().filter { it.isDigit() }
     if (digits.isEmpty()) return ""
-    return digits.toPersianDigits()
+    val normalized = digits.dropWhile { it == '0' }.ifEmpty { "0" }
+    val grouped = normalized.reversed().chunked(3).joinToString("٬").reversed()
+    return grouped.toPersianDigits()
 }
 
 fun String.toLongAmountOrNull(): Long? {
