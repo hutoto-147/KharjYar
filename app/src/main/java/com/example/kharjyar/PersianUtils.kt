@@ -197,6 +197,14 @@ fun String.toPersianDigits(): String = buildString {
     }
 }
 
+fun String.formatAmountInput(): String {
+    val digits = toEnglishDigits().filter { it.isDigit() }
+    if (digits.isEmpty()) return ""
+    val normalized = digits.dropWhile { it == '0' }.ifEmpty { "0" }
+    val grouped = normalized.reversed().chunked(3).joinToString(",").reversed()
+    return grouped.toPersianDigits()
+}
+
 fun String.toLongAmountOrNull(): Long? {
     val digits = toEnglishDigits().filter { it.isDigit() }
     return digits.toLongOrNull()

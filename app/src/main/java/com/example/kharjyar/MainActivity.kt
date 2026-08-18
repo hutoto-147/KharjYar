@@ -756,7 +756,7 @@ private fun AddEntryScreen(
     val baseDate = editingEntry?.occurredAt ?: editingDebt?.occurredAt ?: System.currentTimeMillis()
     val baseParts = PersianDate.parts(baseDate)
 
-    var amountText by remember(editingEntry?.id, editingDebt?.id) { mutableStateOf((editingEntry?.amount ?: editingDebt?.currentAmount)?.toString()?.toPersianDigits().orEmpty()) }
+    var amountText by remember(editingEntry?.id, editingDebt?.id) { mutableStateOf((editingEntry?.amount ?: editingDebt?.currentAmount)?.toString()?.formatAmountInput().orEmpty()) }
     var nameText by remember(editingDebt?.id) { mutableStateOf(editingDebt?.name.orEmpty()) }
     var note by remember(editingEntry?.id, editingDebt?.id) { mutableStateOf(editingEntry?.note ?: editingDebt?.note.orEmpty()) }
     var selectedYear by remember(editingEntry?.id, editingDebt?.id) { mutableIntStateOf(baseParts.year) }
@@ -814,7 +814,7 @@ private fun AddEntryScreen(
 
         if (mode == "هزینه" || mode == "درآمد") {
             OutlinedTextField(
-                value = amountText, onValueChange = { amountText = it }, modifier = Modifier.fillMaxWidth(),
+                value = amountText, onValueChange = { amountText = it.formatAmountInput() }, modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true,
                 label = { Text("مبلغ به تومان") }, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Start)
             )
@@ -899,7 +899,7 @@ private fun AddEntryScreen(
         } else if (mode == "بدهی" || mode == "قرض") {
             val kind = if (mode == "قرض") ObligationKind.LOAN else ObligationKind.DEBT
             OutlinedTextField(nameText, { nameText = it }, Modifier.fillMaxWidth(), label = { Text(if (kind == ObligationKind.LOAN) "نام فرد / موضوع قرض" else "نام بدهی / طلبکار") }, singleLine = true, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Start))
-            OutlinedTextField(amountText, { amountText = it }, Modifier.fillMaxWidth(), label = { Text("مانده فعلی به تومان") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Start))
+            OutlinedTextField(amountText, { amountText = it.formatAmountInput() }, Modifier.fillMaxWidth(), label = { Text("مانده فعلی به تومان") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Start))
             SectionTitle("تاریخ شروع / ثبت")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f)) { DropdownSelector("سال", selectedYear.toString().toPersianDigits(), years.map { it.toString().toPersianDigits() }) { selectedYear = it.toEnglishDigits().toInt() } }
@@ -928,7 +928,7 @@ private fun AddEntryScreen(
                 items(listOf(ReminderKind.INSTALLMENT, ReminderKind.CHECK, ReminderKind.GENERAL)) { k -> FilterChip(selected = reminderKind == k, onClick = { reminderKind = k }, label = { Text(k.titleFa) }) }
             }
             OutlinedTextField(installmentTitle, { installmentTitle = it }, Modifier.fillMaxWidth(), label = { Text("عنوان") }, singleLine = true, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Start))
-            OutlinedTextField(amountText, { amountText = it }, Modifier.fillMaxWidth(), label = { Text(if (reminderKind == ReminderKind.INSTALLMENT) "مبلغ هر قسط" else "مبلغ (اختیاری)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Start))
+            OutlinedTextField(amountText, { amountText = it.formatAmountInput() }, Modifier.fillMaxWidth(), label = { Text(if (reminderKind == ReminderKind.INSTALLMENT) "مبلغ هر قسط" else "مبلغ (اختیاری)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Start))
             if (reminderKind == ReminderKind.INSTALLMENT) OutlinedTextField(installmentCount, { installmentCount = it }, Modifier.fillMaxWidth(), label = { Text("تعداد اقساط باقی‌مانده") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Start))
             SectionTitle("سررسید")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1239,7 +1239,7 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
     val customTags = remember(refreshToken) { repo.customTags() }
 
     var status by remember { mutableStateOf<String?>(null) }
-    var budgetText by remember(refreshToken) { mutableStateOf(repo.budget().takeIf { it > 0 }?.toString()?.toPersianDigits().orEmpty()) }
+    var budgetText by remember(refreshToken) { mutableStateOf(repo.budget().takeIf { it > 0 }?.toString()?.formatAmountInput().orEmpty()) }
     var accountName by remember { mutableStateOf("") }
     var memberName by remember { mutableStateOf("") }
     var categoryType by remember { mutableStateOf(EntryType.EXPENSE) }
@@ -1526,7 +1526,7 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
 
         HorizontalDivider()
         SectionTitle("بودجه ماهانه")
-        OutlinedTextField(budgetText, { budgetText = it }, Modifier.fillMaxWidth(), label = { Text("بودجه به تومان") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Start))
+        OutlinedTextField(budgetText, { budgetText = it.formatAmountInput() }, Modifier.fillMaxWidth(), label = { Text("بودجه به تومان") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Start))
         Button(onClick = { repo.setBudget(budgetText.toLongAmountOrNull() ?: 0L); status = "بودجه ذخیره شد."; onChanged() }) { Text("ذخیره بودجه") }
 
         HorizontalDivider()
