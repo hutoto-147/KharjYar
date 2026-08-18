@@ -90,6 +90,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -559,23 +560,20 @@ private fun MoneyText(
         amount.moneyParts(compact = compact, forcedSign = forcedSign)
     }
 
-    // IMPORTANT: sign, number and unit are separate layout children.
-    // This avoids Android's bidi algorithm reordering a mixed Persian/number string.
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        Row(
-            modifier = modifier,
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            if (parts.sign.isNotBlank()) {
-                Text(
-                    parts.sign,
-                    color = color,
-                    fontWeight = fontWeight,
-                    fontSize = fontSize,
-                    style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr)
-                )
-            }
+    // Physical layout, not bidi layout:
+    // sign -> number -> unit are placed by absolute x coordinates.
+    // This keeps Persian units such as تومان/هزار/میلیون/میلیارد on the same row
+    // without allowing RTL/LTR reordering.
+    Layout(
+        modifier = modifier,
+        content = {
+            Text(
+                parts.sign,
+                color = color,
+                fontWeight = fontWeight,
+                fontSize = fontSize,
+                style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr)
+            )
             Text(
                 parts.number,
                 color = color,
@@ -583,14 +581,41 @@ private fun MoneyText(
                 fontSize = fontSize,
                 style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr)
             )
-            if (parts.unit.isNotBlank()) {
-                Text(
-                    parts.unit,
-                    color = color,
-                    fontWeight = fontWeight,
-                    fontSize = fontSize,
-                    style = LocalTextStyle.current.copy(textDirection = TextDirection.Rtl)
-                )
+            Text(
+                parts.unit,
+                color = color,
+                fontWeight = fontWeight,
+                fontSize = fontSize,
+                style = LocalTextStyle.current.copy(textDirection = TextDirection.Rtl)
+            )
+        }
+    ) { measurables, constraints ->
+        val gap = 4.dp.roundToPx()
+        val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
+        val signP = placeables[0]
+        val numberP = placeables[1]
+        val unitP = placeables[2]
+
+        val signVisible = parts.sign.isNotBlank()
+        val unitVisible = parts.unit.isNotBlank()
+
+        val width =
+            (if (signVisible) signP.width + gap else 0) +
+            numberP.width +
+            (if (unitVisible) gap + unitP.width else 0)
+        val height = maxOf(signP.height, numberP.height, unitP.height)
+
+        layout(width.coerceIn(constraints.minWidth, constraints.maxWidth), height) {
+            var x = 0
+            if (signVisible) {
+                signP.place(x, (height - signP.height) / 2)
+                x += signP.width + gap
+            }
+            numberP.place(x, (height - numberP.height) / 2)
+            x += numberP.width
+            if (unitVisible) {
+                x += gap
+                unitP.place(x, (height - unitP.height) / 2)
             }
         }
     }
