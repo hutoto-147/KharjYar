@@ -287,21 +287,101 @@ fun LedgerApp(biometricAuthenticated: Boolean, requestBiometric: () -> Unit) {
 @Composable
 private fun SplashScreen(theme: VisualTheme) {
     var entered by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { entered = true }
-    val scale by animateFloatAsState(if (entered) 1f else 0.82f, animationSpec = tween(900), label = "splashScale")
-    val alpha by animateFloatAsState(if (entered) 1f else 0f, animationSpec = tween(700), label = "splashAlpha")
+    var spin by remember { mutableStateOf(false) }
+    var showText by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        entered = true
+        spin = true
+        delay(650)
+        showText = true
+    }
+
+    val scale by animateFloatAsState(
+        if (entered) 1f else 0.72f,
+        animationSpec = tween(850),
+        label = "splashScale"
+    )
+    val alpha by animateFloatAsState(
+        if (entered) 1f else 0f,
+        animationSpec = tween(600),
+        label = "splashAlpha"
+    )
+    val rotation by animateFloatAsState(
+        if (spin) 360f else 0f,
+        animationSpec = tween(2350),
+        label = "splashRotation"
+    )
+    val textAlpha by animateFloatAsState(
+        if (showText) 1f else 0f,
+        animationSpec = tween(550),
+        label = "splashTextAlpha"
+    )
+    val textOffset by animateFloatAsState(
+        if (showText) 0f else 18f,
+        animationSpec = tween(550),
+        label = "splashTextOffset"
+    )
+
+    val brandNavy = Color(0xFF052A42)
     Box(
-        modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(theme.primary, theme.primary.copy(alpha = 0.72f)))),
+        modifier = Modifier.fillMaxSize().background(
+            Brush.verticalGradient(
+                listOf(Color(0xFF0B4564), brandNavy, Color(0xFF031C2E))
+            )
+        ),
         contentAlignment = Alignment.Center
     ) {
         Column(
-            modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale, alpha = alpha),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            Image(painter = painterResource(com.example.kharjyar.R.drawable.ic_dakhl_kharj_logo), contentDescription = "لوگوی دخل و خرج", modifier = Modifier.size(112.dp))
-            Text("دخل و خرج", color = Color.White, fontSize = 42.sp, fontWeight = FontWeight.Bold)
-            Text("حساب ساده، تصمیم روشن", color = Color.White.copy(alpha = 0.88f), fontSize = 14.sp)
+            Box(
+                modifier = Modifier
+                    .size(190.dp)
+                    .graphicsLayer(scaleX = scale, scaleY = scale, alpha = alpha),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.ic_dakhl_kharj_brand),
+                    contentDescription = "لوگوی دخل و خرج",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer(rotationZ = rotation)
+                )
+
+                // Center mask keeps the currency symbol visually fixed while arrows rotate.
+                Box(
+                    modifier = Modifier
+                        .size(66.dp)
+                        .clip(CircleShape)
+                        .background(brandNavy)
+                )
+                Text(
+                    "\$",
+                    color = Color.White,
+                    fontSize = 58.sp,
+                    lineHeight = 58.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        alpha = alpha
+                    )
+                )
+            }
+
+            Column(
+                modifier = Modifier.graphicsLayer(
+                    alpha = textAlpha,
+                    translationY = textOffset
+                ),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text("دخل و خرج", color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
+                Text("حساب ساده، تصمیم روشن", color = Color.White.copy(alpha = 0.84f), fontSize = 14.sp)
+            }
         }
     }
 }

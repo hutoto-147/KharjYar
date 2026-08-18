@@ -93,7 +93,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val contentPending = PendingIntent.getActivity(context, id, openIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         val notification = NotificationCompat.Builder(context, ReminderScheduler.CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_dakhl_kharj_notification)
+            .setSmallIcon(R.drawable.ic_dakhl_kharj_notification_v2)
             .setContentTitle(title)
             .setContentText(note)
             .setStyle(NotificationCompat.BigTextStyle().bigText(note))
