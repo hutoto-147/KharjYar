@@ -3,36 +3,52 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_FILE")
+val releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+
 android {
     namespace = "com.example.kharjyar"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.example.kharjyar"
+        applicationId = "io.github.hutoto147.dakhlokharj"
         minSdk = 26
         targetSdk = 36
-        versionCode = 30
-        versionName = "1.1.0-beta16"
+        versionCode = 1
+        versionName = "1.0.0"
     }
 
-    // سازگاری با نسخه‌های قبلی نصب‌شده از GitHub
     signingConfigs {
-        create("legacyCompatible") {
-            storeFile = file("kharjyar-test.keystore")
-            storePassword = "kharjyar123"
-            keyAlias = "kharjyar-test"
-            keyPassword = "kharjyar123"
+        if (
+            !releaseKeystorePath.isNullOrBlank() &&
+            !releaseStorePassword.isNullOrBlank() &&
+            !releaseKeyAlias.isNullOrBlank() &&
+            !releaseKeyPassword.isNullOrBlank()
+        ) {
+            create("releaseSecure") {
+                storeFile = file(releaseKeystorePath)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
 
     buildTypes {
         getByName("debug") {
-            signingConfig = signingConfigs.getByName("legacyCompatible")
+            // Debug builds can coexist with the public app and cannot overwrite it.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
         }
         getByName("release") {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("legacyCompatible")
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfigs.findByName("releaseSecure")?.let { signingConfig = it }
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 

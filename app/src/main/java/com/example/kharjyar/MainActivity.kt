@@ -1277,14 +1277,7 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
             }
         }
     }
-    val smsPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        val readGranted = result[Manifest.permission.READ_SMS] == true || context.checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
-        if (readGranted) {
-            val imported = runCatching { BankSmsImporter.scanExisting(context) }.getOrDefault(0)
-            status = "مجوز SMS فعال شد؛ ${imported.toString().toPersianDigits()} پیام بانکی برای بررسی پیدا شد."
-            onChanged()
-        } else status = "اندروید مجوز مستقیم SMS را نداد؛ از دسترسی اعلان‌ها استفاده کنید."
-    }
+    var showBankDisclosure by rememberSaveable { mutableStateOf(false) }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> status = if (granted) "اجازه اعلان فعال شد." else "اجازه اعلان داده نشد." }
 
     Column(
@@ -1393,23 +1386,50 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
         }
 
         HorizontalDivider()
-        SectionTitle("خواندن خودکار پیامک / اعلان بانکی")
-        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF4A2830) else ExpenseSoftLight)) {
-            Text("دو مسیر در نظر گرفته شده: خواندن SMS در دستگاه‌هایی که Android اجازه بدهد، و دسترسی به اعلان‌ها به‌عنوان مسیر سازگارتر. پیام بانکی مستقیماً وارد دفتر نمی‌شود؛ ابتدا در صندوق بررسی قرار می‌گیرد تا دسته و تگ را بعداً مشخص کنید.", Modifier.padding(14.dp), textAlign = TextAlign.Start)
+        SectionTitle("خواندن خودکار اعلان بانکی")
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDark) Color(0xFF4A2830) else ExpenseSoftLight
+            )
+        ) {
+            Text(
+                "با فعال‌کردن دسترسی اعلان‌ها، دخل و خرج می‌تواند اعلان‌های بانکی را روی همین دستگاه بررسی کند و موارد تشخیص‌داده‌شده را ابتدا در صندوق بررسی نشان دهد. داده‌ها به سرور ارسال نمی‌شوند.",
+                Modifier.padding(14.dp),
+                textAlign = TextAlign.Start
+            )
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(modifier = Modifier.weight(1f), onClick = {
-                runCatching { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
-                    .onFailure { status = "باز کردن دسترسی اعلان‌ها ممکن نشد: ${it.message}" }
-            }) { Text("فعال‌سازی اعلان بانکی") }
-            OutlinedButton(modifier = Modifier.weight(1f), onClick = { smsPermissionLauncher.launchSafely(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS)) { status = it } }) { Text("SMS (اختیاری)") }
+        Button(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = { showBankDisclosure = true }
+        ) { Text("فعال‌سازی اعلان بانکی") }
+
+        if (showBankDisclosure) {
+            AlertDialog(
+                onDismissRequest = { showBankDisclosure = false },
+                title = { Text("دسترسی به اعلان‌های بانکی") },
+                text = {
+                    Text(
+                        "دخل و خرج برای شناسایی خودکار تراکنش‌های بانکی، متن اعلان‌های دستگاه را زمانی که این قابلیت فعال است بررسی می‌کند. پردازش روی خود گوشی انجام می‌شود؛ متن اعلان‌ها و اطلاعات مالی به سرور توسعه‌دهنده ارسال یا با شخص ثالثی به اشتراک گذاشته نمی‌شود. اعلان تشخیص‌داده‌شده ابتدا در صندوق بررسی قرار می‌گیرد و بدون تأیید شما به‌عنوان تراکنش ثبت نمی‌شود."
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        showBankDisclosure = false
+                        runCatching {
+                            context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                        }.onFailure {
+                            status = "باز کردن دسترسی اعلان‌ها ممکن نشد: ${it.message}"
+                        }
+                    }) { Text("موافقم، ادامه") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showBankDisclosure = false }) {
+                        Text("فعلاً نه")
+                    }
+                }
+            )
         }
-        OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = {
-            if (context.checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED) {
-                val imported = runCatching { BankSmsImporter.scanExisting(context) }.getOrDefault(0)
-                status = "${imported.toString().toPersianDigits()} پیام بانکی جدید به صندوق بررسی اضافه شد."; onChanged()
-            } else smsPermissionLauncher.launchSafely(arrayOf(Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS)) { status = it }
-        }) { Text("اسکن پیامک‌های قبلی") }
         if (bankImports.isEmpty()) {
             EmptyState("پیام بانکی جدیدی برای بررسی ندارید.")
         } else {
@@ -1580,6 +1600,15 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
                     OutlinedButton(onClick = { openUrlSafely(context, "https://github.com/hutoto-147/KharjYar") { status = it } }, modifier = Modifier.weight(1f)) { Text("GitHub") }
                     OutlinedButton(onClick = { openUrlSafely(context, "https://github.com/hutoto-147/KharjYar/issues") { status = it } }, modifier = Modifier.weight(1f)) { Text("نظر / گزارش مشکل") }
                 }
+                OutlinedButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        openUrlSafely(
+                            context,
+                            "https://hutoto-147.github.io/KharjYar/privacy.html"
+                        ) { status = it }
+                    }
+                ) { Text("سیاست حریم خصوصی") }
             }
         }
 

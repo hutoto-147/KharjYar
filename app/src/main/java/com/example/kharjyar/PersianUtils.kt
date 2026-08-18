@@ -154,11 +154,8 @@ object PersianDate {
 }
 
 /**
- * Groups the digits of the absolute value of this number into 3-digit
- * clusters separated by "." (e.g. 120000000 -> "۱۲۰.۰۰۰.۰۰۰").
- * A dot is used instead of a comma so it doesn't get confused with the
- * decimal comma some Persian locales use, and doesn't collide with the
- * "٬" grouping mark used elsewhere for parsing.
+ * Groups the absolute amount into 3-digit clusters with the Persian thousands
+ * separator U+066C. Example: 1200000 -> ۱٬۲۰۰٬۰۰۰
  */
 fun Long.toGroupedPersianDigits(): String {
     val digits = kotlin.math.abs(this).toString()

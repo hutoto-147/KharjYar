@@ -1,11 +1,7 @@
 package com.example.kharjyar
 
 import android.app.Notification
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.provider.Telephony
-import android.net.Uri
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import java.security.MessageDigest
@@ -66,43 +62,6 @@ object BankMessageParser {
             .mapNotNull { convert(it.groupValues[1], null) }
             .filterNot { it in 1300L..1600L }
             .maxOrNull()
-    }
-}
-
-object BankSmsImporter {
-    fun scanExisting(context: Context, limit: Int = 250): Int {
-        val repo = LedgerRepository(context)
-        var count = 0
-        val uri = Uri.parse("content://sms/inbox")
-        val projection = arrayOf("address", "body", "date")
-        val cursor = context.contentResolver.query(uri, projection, null, null, "date DESC") ?: return 0
-        cursor.use { c ->
-            val addressIdx = c.getColumnIndex("address")
-            val bodyIdx = c.getColumnIndex("body")
-            val dateIdx = c.getColumnIndex("date")
-            var seen = 0
-            while (c.moveToNext() && seen < limit) {
-                seen++
-                val sender = if (addressIdx >= 0) c.getString(addressIdx).orEmpty() else "بانک"
-                val body = if (bodyIdx >= 0) c.getString(bodyIdx).orEmpty() else ""
-                val date = if (dateIdx >= 0) c.getLong(dateIdx) else System.currentTimeMillis()
-                val item = BankMessageParser.parse(sender, body, date) ?: continue
-                if (repo.saveBankImport(item) > 0) count++
-            }
-        }
-        return count
-    }
-}
-
-class BankSmsReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
-        val repo = LedgerRepository(context)
-        Telephony.Sms.Intents.getMessagesFromIntent(intent).groupBy { it.originatingAddress.orEmpty() }.forEach { (sender, parts) ->
-            val body = parts.joinToString("") { it.messageBody.orEmpty() }
-            val time = parts.firstOrNull()?.timestampMillis ?: System.currentTimeMillis()
-            BankMessageParser.parse(sender, body, time)?.let(repo::saveBankImport)
-        }
     }
 }
 
