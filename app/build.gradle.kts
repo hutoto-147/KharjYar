@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.kharjyar"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.1.0-beta10"
+        versionCode = 20
+        versionName = "1.1.0-beta13"
     }
 
     // سازگاری با نسخه‌های قبلی نصب‌شده از GitHub:
