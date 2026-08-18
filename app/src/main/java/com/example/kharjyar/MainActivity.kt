@@ -82,6 +82,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -109,7 +110,10 @@ import androidx.core.content.ContextCompat
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
@@ -1166,29 +1170,27 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
     var recurringExpanded by rememberSaveable { mutableStateOf(false) }
     var remindersExpanded by rememberSaveable { mutableStateOf(false) }
 
-    val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    val fileScope = rememberCoroutineScope()
+    val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(repo.exportJson().toByteArray(Charsets.UTF_8)) } }
-            .onSuccess { status = "بکاپ ذخیره شد. اگر Google Drive را انتخاب کرده باشید، فایل در فضای ابری شماست." }
-            .onFailure { status = "خطا در ذخیره بکاپ: ${it.message}" }
-    }
-    val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        runCatching {
-            val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: error("فایل خوانده نشد")
-            repo.importJson(json)
-            ReminderScheduler.scheduleAll(context)
-        }.onSuccess { status = "بکاپ بازیابی شد."; onChanged() }.onFailure { status = "بازیابی ناموفق: ${it.message}" }
-    }
-    val xlsxLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        runCatching { context.contentResolver.openOutputStream(uri)?.use { Exporters.writeExcel(entries, it) } }
-            .onSuccess { status = "فایل Excel ذخیره شد." }.onFailure { status = "خطا در Excel: ${it.message}" }
-    }
-    val pdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        runCatching { context.contentResolver.openOutputStream(uri)?.use { Exporters.writePdf(entries, it) } }
-            .onSuccess { status = "فایل PDF ذخیره شد." }.onFailure { status = "خطا در PDF: ${it.message}" }
+        fileScope.launch {
+            status = "در حال بررسی و بازیابی بکاپ…"
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val json = FileTransferSupport.readText(context, uri)
+                    require(json.isNotBlank()) { "فایل انتخاب‌شده خالی است." }
+                    FileTransferSupport.saveSafetyBackup(context, repo.exportJson())
+                    repo.importJson(json)
+                }
+            }
+            result.onSuccess {
+                ReminderScheduler.scheduleAll(context)
+                status = "بکاپ با موفقیت بازیابی شد. یک نسخه ایمنی از اطلاعات قبل از بازیابی نیز نگه‌داری شد."
+                onChanged()
+            }.onFailure {
+                status = "بازیابی ناموفق: ${it.message ?: "فایل معتبر نیست یا خوانده نشد."}"
+            }
+        }
     }
     val smsPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         val readGranted = result[Manifest.permission.READ_SMS] == true || context.checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
@@ -1213,8 +1215,6 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
             Text("حالت تیره", fontWeight = FontWeight.SemiBold)
             Switch(checked = isDark, onCheckedChange = { repo.setSetting("theme_dark", if (it) "1" else "0"); onChanged() })
         }
-        Text("۵ رنگ در دو حالت روشن و تیره؛ یعنی ۱۰ ترکیب پس‌زمینه.", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start, fontSize = 12.sp)
-
         Text("رنگ نمودارها", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start, fontWeight = FontWeight.SemiBold)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(chartPalettes) { p -> FilterChip(selected = selectedPalette == p.id, onClick = { repo.setSetting("chart_palette", p.id); onChanged() }, label = { Text(p.title) }) }
@@ -1223,7 +1223,6 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
         HorizontalDivider()
         SectionTitle("فونت و اندازه نوشته")
         DropdownSelector("فونت", selectedFont, fontOptions) { repo.setSetting("font_name", it); onChanged() }
-        Text("فونت از فونت‌های نصب‌شده دستگاه استفاده می‌شود؛ اگر یک فونت روی گوشی موجود نباشد، اندروید نزدیک‌ترین جایگزین را نمایش می‌دهد.", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start, fontSize = 11.sp)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(fontSizeOptions) { pair -> FilterChip(selected = kotlin.math.abs(selectedScale - pair.second) < 0.01f, onClick = { repo.setSetting("font_scale", pair.second.toString()); onChanged() }, label = { Text(pair.first) }) }
         }
@@ -1231,15 +1230,65 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
         HorizontalDivider()
         SectionTitle("بکاپ و انتقال اطلاعات")
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF23394F) else BalanceSoftLight)) {
-            Text("بکاپ شامل تراکنش‌ها، بدهی و قرض، حساب‌ها، دسته‌ها، تگ‌ها، تنظیمات، اقساط و یادآورهاست. هنگام ذخیره می‌توانید Google Drive یا هر فضای ابری موجود در انتخابگر Android را انتخاب کنید.", Modifier.padding(14.dp), textAlign = TextAlign.Start)
+            Text("در Androidهای جدید، بکاپ و خروجی‌ها مستقیم در Downloads/DakhlKharj ذخیره می‌شوند؛ در نسخه‌های قدیمی‌تر مسیر دقیق فایل پس از ذخیره نمایش داده می‌شود.", Modifier.padding(14.dp), textAlign = TextAlign.Start)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(modifier = Modifier.weight(1f), onClick = { backupLauncher.launchSafely("DakhlKharj-Backup-${PersianDate.format(System.currentTimeMillis()).replace("/", "-")}.json") { status = it } }) { Text("تهیه بکاپ") }
-            OutlinedButton(modifier = Modifier.weight(1f), onClick = { restoreLauncher.launchSafely(arrayOf("application/json", "text/plain", "*/*")) { status = it } }) { Text("بازیابی") }
+            Button(modifier = Modifier.weight(1f), onClick = {
+                fileScope.launch {
+                    status = "در حال تهیه بکاپ…"
+                    val result = withContext(Dispatchers.IO) {
+                        runCatching {
+                            val name = "DakhlKharj-Backup-${PersianDate.format(System.currentTimeMillis()).replace("/", "-")}.json"
+                            FileTransferSupport.saveToDownloads(context, name, "application/json") { output ->
+                                output.write(repo.exportJson().toByteArray(Charsets.UTF_8))
+                            }
+                        }
+                    }
+                    status = result.fold(
+                        onSuccess = { "بکاپ ذخیره شد: $it" },
+                        onFailure = { "خطا در ذخیره بکاپ: ${it.message ?: "امکان ساخت فایل نبود."}" }
+                    )
+                }
+            }) { Text("تهیه بکاپ") }
+            OutlinedButton(modifier = Modifier.weight(1f), onClick = {
+                restoreLauncher.launchSafely("*/*") { status = it }
+            }) { Text("بازیابی") }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(modifier = Modifier.weight(1f), onClick = { xlsxLauncher.launchSafely("DakhlKharj-Transactions.xlsx") { status = it } }) { Text("خروجی Excel") }
-            OutlinedButton(modifier = Modifier.weight(1f), onClick = { pdfLauncher.launchSafely("DakhlKharj-Report.pdf") { status = it } }) { Text("خروجی PDF") }
+            OutlinedButton(modifier = Modifier.weight(1f), onClick = {
+                fileScope.launch {
+                    status = "در حال ساخت فایل Excel…"
+                    val result = withContext(Dispatchers.IO) {
+                        runCatching {
+                            FileTransferSupport.saveToDownloads(
+                                context,
+                                "DakhlKharj-Transactions.xlsx",
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            ) { output -> Exporters.writeExcel(entries, output) }
+                        }
+                    }
+                    status = result.fold(
+                        onSuccess = { "فایل Excel ذخیره شد: $it" },
+                        onFailure = { "خطا در Excel: ${it.message ?: "امکان ساخت فایل نبود."}" }
+                    )
+                }
+            }) { Text("خروجی Excel") }
+            OutlinedButton(modifier = Modifier.weight(1f), onClick = {
+                fileScope.launch {
+                    status = "در حال ساخت PDF…"
+                    val result = withContext(Dispatchers.IO) {
+                        runCatching {
+                            FileTransferSupport.saveToDownloads(context, "DakhlKharj-Report.pdf", "application/pdf") { output ->
+                                Exporters.writePdf(entries, output)
+                            }
+                        }
+                    }
+                    status = result.fold(
+                        onSuccess = { "فایل PDF ذخیره شد: $it" },
+                        onFailure = { "خطا در PDF: ${it.message ?: "امکان ساخت فایل نبود."}" }
+                    )
+                }
+            }) { Text("خروجی PDF") }
         }
 
         HorizontalDivider()
