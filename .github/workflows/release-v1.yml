@@ -1,13 +1,13 @@
-name: Publish KharjYar v1.0
+name: Build Dakhl-o-Kharj 1.0 AAB
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  build-play-aab:
     runs-on: ubuntu-24.04
 
     steps:
@@ -25,19 +25,38 @@ jobs:
         with:
           gradle-version: '9.4.1'
 
-      - name: Build signed release APK and AAB
-        run: gradle :app:assembleRelease :app:bundleRelease --no-daemon
-
-      - name: Prepare release files
-        run: |
-          cp app/build/outputs/apk/release/app-release.apk KharjYar-v1.0.apk
-          cp app/build/outputs/bundle/release/app-release.aab KharjYar-v1.0.aab
-
-      - name: Create GitHub Release v1.0
+      - name: Check signing secrets
         env:
-          GH_TOKEN: ${{ github.token }}
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          gh release create v1.0.0 KharjYar-v1.0.apk KharjYar-v1.0.aab \
-            --title "خرج‌یار v1.0" \
-            --notes "اولین نسخه عمومی خرج‌یار برای اندروید. شامل مدیریت درآمد و هزینه، بدهی و قرض، مقایسه نموداری، یادآورها، بکاپ، خروجی PDF/Excel، حساب‌های بانکی و امکانات شخصی‌سازی." \
-            --latest
+          test -n "$KEYSTORE_B64" || (echo "Missing ANDROID_KEYSTORE_BASE64" && exit 1)
+          test -n "$STORE_PASSWORD" || (echo "Missing ANDROID_KEYSTORE_PASSWORD" && exit 1)
+          test -n "$KEY_ALIAS" || (echo "Missing ANDROID_KEY_ALIAS" && exit 1)
+          test -n "$KEY_PASSWORD" || (echo "Missing ANDROID_KEY_PASSWORD" && exit 1)
+
+      - name: Decode upload keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/dakhl-kharj-upload.jks"
+
+      - name: Run unit tests
+        run: gradle :app:testDebugUnitTest --no-daemon
+
+      - name: Build signed release AAB
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/dakhl-kharj-upload.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle :app:bundleRelease --no-daemon
+
+      - name: Upload Play AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: DakhlKharj-1.0.0-AAB
+          path: app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
