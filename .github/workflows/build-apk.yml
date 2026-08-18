@@ -1,10 +1,11 @@
-name: Build Android APK
+name: Build Dakhl-o-Kharj APK
 
 on:
   workflow_dispatch:
   push:
     branches:
       - main
+      - 'agent/**'
 
 jobs:
   build:
@@ -25,12 +26,15 @@ jobs:
         with:
           gradle-version: '9.4.1'
 
-      - name: Build APK
+      - name: Run unit tests
+        run: gradle :app:testDebugUnitTest --no-daemon
+
+      - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: KharjYar-APK
+          name: DakhlKharj-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
