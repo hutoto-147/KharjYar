@@ -106,6 +106,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -463,9 +464,9 @@ private fun DashboardScreen(repo: LedgerRepository, refreshToken: Int, dark: Boo
         }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MetricCard(Modifier.weight(1f), "درآمد", income.asCompactToman(), incomeBg)
-                MetricCard(Modifier.weight(1f), "هزینه", expense.asCompactToman(), expenseBg)
-                MetricCard(Modifier.weight(1f), "مانده", balance.asCompactToman(), balanceBg)
+                MetricCard(Modifier.weight(1f), "درآمد", income, incomeBg)
+                MetricCard(Modifier.weight(1f), "هزینه", expense, expenseBg)
+                MetricCard(Modifier.weight(1f), "مانده", balance, balanceBg)
             }
         }
         item {
@@ -481,13 +482,16 @@ private fun DashboardScreen(repo: LedgerRepository, refreshToken: Int, dark: Boo
                         }
                     }
                     Text(comparison, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
-                    Text("مانده خالص: ${balance.asToman()}", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
-                    Text("بدهی فعال: ${debts.sumOf { it.currentAmount }.asToman()}  •  قرض داده‌شده: ${loans.sumOf { it.currentAmount }.asToman()}", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                    LabeledMoneyLine("مانده خالص:", balance)
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        LabeledMoneyLine("بدهی فعال:", debts.sumOf { it.currentAmount })
+                        LabeledMoneyLine("قرض داده‌شده:", loans.sumOf { it.currentAmount })
+                    }
                     if (budget > 0L) {
                         val progress = (expense.toFloat() / budget.toFloat()).coerceIn(0f, 1f)
-                        Text("بودجه: ${budget.asToman()}", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                        LabeledMoneyLine("بودجه:", budget)
                         LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
-                        Text("باقی‌مانده بودجه: ${(budget - expense).asToman()}", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                        LabeledMoneyLine("باقی‌مانده بودجه:", budget - expense)
                     }
                 }
             }
@@ -502,7 +506,7 @@ private fun DashboardScreen(repo: LedgerRepository, refreshToken: Int, dark: Boo
                                 Text(Presets.categoryIcon(pair.first, EntryType.EXPENSE), fontSize = 20.sp)
                                 Text(pair.first, fontWeight = FontWeight.SemiBold)
                             }
-                            Text(pair.second.asToman())
+                            MoneyText(pair.second)
                         }
                         if (index != top.lastIndex) HorizontalDivider()
                     }
@@ -522,13 +526,92 @@ private fun DashboardScreen(repo: LedgerRepository, refreshToken: Int, dark: Boo
 }
 
 @Composable
-private fun MetricCard(modifier: Modifier, title: String, value: String, background: Color) {
+private fun MetricCard(modifier: Modifier, title: String, amount: Long, background: Color) {
     Card(modifier = modifier.height(116.dp), colors = CardDefaults.cardColors(containerColor = background), shape = RoundedCornerShape(20.dp)) {
-        Column(Modifier.fillMaxSize().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Column(
+            Modifier.fillMaxSize().padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
             Text(title, textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
-            Text(value, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold, fontSize = 16.sp, lineHeight = 20.sp)
+            MoneyText(
+                amount = amount,
+                compact = true,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
         }
+    }
+}
+
+@Composable
+private fun MoneyText(
+    amount: Long,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+    forcedSign: String? = null,
+    color: Color = Color.Unspecified,
+    fontWeight: FontWeight? = null,
+    fontSize: TextUnit = TextUnit.Unspecified
+) {
+    val parts = remember(amount, compact, forcedSign) {
+        amount.moneyParts(compact = compact, forcedSign = forcedSign)
+    }
+
+    // IMPORTANT: sign, number and unit are separate layout children.
+    // This avoids Android's bidi algorithm reordering a mixed Persian/number string.
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Row(
+            modifier = modifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (parts.sign.isNotBlank()) {
+                Text(
+                    parts.sign,
+                    color = color,
+                    fontWeight = fontWeight,
+                    fontSize = fontSize,
+                    style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr)
+                )
+            }
+            Text(
+                parts.number,
+                color = color,
+                fontWeight = fontWeight,
+                fontSize = fontSize,
+                style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr)
+            )
+            if (parts.unit.isNotBlank()) {
+                Text(
+                    parts.unit,
+                    color = color,
+                    fontWeight = fontWeight,
+                    fontSize = fontSize,
+                    style = LocalTextStyle.current.copy(textDirection = TextDirection.Rtl)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LabeledMoneyLine(
+    label: String,
+    amount: Long,
+    centered: Boolean = false,
+    fontWeight: FontWeight? = null,
+    fontSize: TextUnit = TextUnit.Unspecified
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (centered) Arrangement.Center else Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, fontWeight = fontWeight, fontSize = fontSize)
+        Spacer(Modifier.width(6.dp))
+        MoneyText(amount = amount, fontWeight = fontWeight, fontSize = fontSize)
     }
 }
 
@@ -646,31 +729,12 @@ private fun EntryCard(entry: LedgerEntry, onEdit: () -> Unit, onDelete: () -> Un
                         if (entry.subcategory.isNotBlank()) Text(entry.subcategory, fontSize = 12.sp)
                     }
                 }
-                val groupedAmount = entry.amount.asToman().removeSuffix(" تومان")
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            if (entry.type == EntryType.INCOME) "+" else "−",
-                            color = strong,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            groupedAmount,
-                            color = strong,
-                            fontWeight = FontWeight.Bold,
-                            style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr)
-                        )
-                        Text(
-                            "تومان",
-                            color = strong,
-                            fontWeight = FontWeight.Bold,
-                            style = LocalTextStyle.current.copy(textDirection = TextDirection.Rtl)
-                        )
-                    }
-                }
+                MoneyText(
+                    amount = entry.amount,
+                    forcedSign = if (entry.type == EntryType.INCOME) "+" else "−",
+                    color = strong,
+                    fontWeight = FontWeight.Bold
+                )
             }
             Text("${PersianDate.format(entry.occurredAt)}  •  ${entry.accountName}  •  ${entry.memberName}", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start, fontSize = 12.sp)
             if (entry.note.isNotBlank()) Text(entry.note, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
@@ -692,7 +756,7 @@ private fun DebtCard(debt: Debt, onEdit: () -> Unit, onDelete: () -> Unit) {
                     Text(if (isLoan) "🤝" else "📒", fontSize = 22.sp)
                     Column { Text(debt.name, fontWeight = FontWeight.Bold, fontSize = 17.sp); Text(debt.kind.titleFa, fontSize = 12.sp) }
                 }
-                Text(debt.currentAmount.asToman(), color = if (isLoan) LoanStrong else DebtStrong, fontWeight = FontWeight.Bold)
+                MoneyText(debt.currentAmount, color = if (isLoan) LoanStrong else DebtStrong, fontWeight = FontWeight.Bold)
             }
             if (debt.dueAt > 0) Text("سررسید: ${PersianDate.format(debt.dueAt)}", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
             if (debt.note.isNotBlank()) Text(debt.note, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
@@ -1121,19 +1185,19 @@ private fun IncomeExpenseOverview(income: Long, expense: Long, paletteId: String
         Column(Modifier.fillMaxWidth().padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("مقایسه این ماه", fontSize = 19.sp, fontWeight = FontWeight.Bold)
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("درآمد", fontWeight = FontWeight.SemiBold); Text(income.asToman(), fontWeight = FontWeight.Bold) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("درآمد", fontWeight = FontWeight.SemiBold); MoneyText(income, fontWeight = FontWeight.Bold) }
                 Box(Modifier.fillMaxWidth().height(22.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
                     Box(Modifier.fillMaxWidth(incomeRatio.coerceAtLeast(0.025f)).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(palette.income))
                 }
             }
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("هزینه", fontWeight = FontWeight.SemiBold); Text(expense.asToman(), fontWeight = FontWeight.Bold) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("هزینه", fontWeight = FontWeight.SemiBold); MoneyText(expense, fontWeight = FontWeight.Bold) }
                 Box(Modifier.fillMaxWidth().height(22.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
                     Box(Modifier.fillMaxWidth(expenseRatio.coerceAtLeast(0.025f)).fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(palette.expense))
                 }
             }
             val balance = income - expense
-            Text("مانده این ماه: ${balance.asToman()}", textAlign = TextAlign.Center, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            LabeledMoneyLine("مانده این ماه:", balance, centered = true, fontWeight = FontWeight.Bold, fontSize = 17.sp)
             if (income > 0L) Text("هزینه معادل ${((expense.toDouble() / income.toDouble()) * 100).roundToInt().toString().toPersianDigits()}٪ درآمد است.", textAlign = TextAlign.Center, fontSize = 12.sp)
         }
     }
@@ -1377,7 +1441,7 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
             bankImports.take(12).forEach { item ->
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
                     Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(item.sender, fontWeight = FontWeight.Bold); Text(item.amount.asToman()) }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(item.sender, fontWeight = FontWeight.Bold); MoneyText(item.amount) }
                         Text(item.body.take(220), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start, fontSize = 12.sp)
                         Text("تشخیص: ${item.direction.titleFa} • ${PersianDate.format(item.occurredAt)}", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start, fontSize = 11.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1403,7 +1467,7 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
             val balance = a.openingBalance + accountEntries.filter { it.type == EntryType.INCOME }.sumOf { it.amount } - accountEntries.filter { it.type == EntryType.EXPENSE }.sumOf { it.amount }
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("${a.icon} ${a.name} • ${a.type}")
-                Text(balance.asToman(), fontWeight = FontWeight.SemiBold)
+                MoneyText(balance, fontWeight = FontWeight.SemiBold)
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1453,7 +1517,7 @@ private fun SettingsScreen(repo: LedgerRepository, refreshToken: Int, onChanged:
                 installments.forEach { plan ->
                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF49371D) else DebtSoftLight), shape = RoundedCornerShape(14.dp)) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("قسط: ${plan.title}", fontWeight = FontWeight.Bold); Text(plan.installmentAmount.asToman()) }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("قسط: ${plan.title}", fontWeight = FontWeight.Bold); MoneyText(plan.installmentAmount) }
                             Text("${plan.remainingCount.toString().toPersianDigits()} قسط باقی‌مانده • سررسید بعدی ${PersianDate.format(plan.nextDueAt)}", fontSize = 12.sp)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 TextButton(onClick = { repo.advanceInstallment(plan); ReminderScheduler.scheduleAll(context); onChanged() }) { Text("این قسط پرداخت شد") }
