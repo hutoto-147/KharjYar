@@ -307,13 +307,23 @@ private fun SplashScreen(theme: VisualTheme) {
             ),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            "دخل و خرج",
-            color = Color.White,
-            fontSize = 42.sp,
-            fontWeight = FontWeight.Bold,
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.graphicsLayer(alpha = alpha)
-        )
+        ) {
+            Text(
+                "دخل و خرج",
+                color = Color.White,
+                fontSize = 42.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "حساب ساده، تصمیم روشن",
+                color = Color.White.copy(alpha = 0.84f),
+                fontSize = 14.sp
+            )
+        }
     }
 }
 
@@ -636,6 +646,7 @@ private fun EntryCard(entry: LedgerEntry, onEdit: () -> Unit, onDelete: () -> Un
                         if (entry.subcategory.isNotBlank()) Text(entry.subcategory, fontSize = 12.sp)
                     }
                 }
+                val groupedAmount = entry.amount.asToman().removeSuffix(" تومان")
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -647,7 +658,13 @@ private fun EntryCard(entry: LedgerEntry, onEdit: () -> Unit, onDelete: () -> Un
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            entry.amount.asToman(),
+                            groupedAmount,
+                            color = strong,
+                            fontWeight = FontWeight.Bold,
+                            style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr)
+                        )
+                        Text(
+                            "تومان",
                             color = strong,
                             fontWeight = FontWeight.Bold,
                             style = LocalTextStyle.current.copy(textDirection = TextDirection.Rtl)
